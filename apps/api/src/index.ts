@@ -126,9 +126,9 @@ app.setErrorHandler((error, request, reply) => {
 
 const start = async () => {
   try {
-    const port = parseInt(process.env.API_PORT || '3001');
-    // SECURITY: bind to localhost only — never expose to external network
-    await app.listen({ port, host: '127.0.0.1' });
+    const port = parseInt(process.env.PORT || process.env.API_PORT || '3001');
+    // For cloud deployment (Render, Railway, etc.), must bind to 0.0.0.0
+    await app.listen({ port, host: '0.0.0.0' });
     console.log(`🚀 API server running on port ${port}`);
     
     // Initialize badges

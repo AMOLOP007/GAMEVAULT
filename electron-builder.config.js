@@ -24,15 +24,7 @@ module.exports = {
     'apps/desktop/dist/**/*',
     'apps/desktop/assets/**/*',
     
-    // API server (compiled)
-    'apps/api/dist/**/*',
-    
-    // Web frontend (standalone build)
-    'apps/web/.next/standalone/**/*',
-    'apps/web/.next/static/**/*',
-    'apps/web/public/**/*',
-    
-    // Prisma client and schema
+    // Prisma client and schema for local SQLite
     'database/schema.prisma',
     'node_modules/prisma-client-desktop/**/*',
     'node_modules/prisma-client-api/**/*',

@@ -20,6 +20,11 @@ import { resolveLaunchConfig } from './launcher/LaunchResolver.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ── Configuration ────────────────────────────────
+// In production, these should point to the centralized cloud service
+const API_BASE_URL = process.env.API_URL || (app.isPackaged ? 'https://api.gamevault.com' : 'http://localhost:3001');
+const WEB_BASE_URL = process.env.WEB_URL || (app.isPackaged ? 'https://app.gamevault.com' : 'http://localhost:3000');
+
 // ── Components ───────────────────────────────
 const detector = new PsListDetector();
 const gameDetector = new GameDetector(process.env.RAWG_KEY || '');
@@ -68,9 +73,9 @@ function createMainWindow() {
   const userId = store.get('userId');
 
   if (!token) {
-    mainWindow.loadURL('http://localhost:3000/login?electron=true');
+    mainWindow.loadURL(`${WEB_BASE_URL}/login?electron=true`);
   } else {
-    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.loadURL(`${WEB_BASE_URL}`);
     if (userId) {
       autoScanAndSync(userId);
     }
@@ -130,7 +135,7 @@ async function autoScanAndSync(userId: string) {
       // SYNC TO CENTRAL API
       const token = store.get('token');
       if (token) {
-        axios.post(`http://localhost:${process.env.API_PORT || 3001}/api/games`, {
+        axios.post(`${API_BASE_URL}/api/games`, {
           title: game.name,
           exePath: game.exePath,
           source: game.source,
@@ -149,7 +154,7 @@ async function autoScanAndSync(userId: string) {
     const token = store.get('token');
     if (token) {
       log.info('[AutoScan] Triggering background Steam sync...');
-      axios.post(`http://localhost:${process.env.API_PORT || 3001}/api/sync/steam-all-public`, {}, {
+      axios.post(`${API_BASE_URL}/api/sync/steam-all-public`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       }).then(res => {
         log.info(`[AutoScan] Steam sync background complete: ${res.data.message}`);
@@ -230,13 +235,13 @@ function setupTracker() {
     if (game?.steamAppId) {
       log.info(`[Main] Game ${game.title} ended. Triggering Steam sync...`);
       const token = store.get('token');
-      const profileRes = await axios.get(`http://localhost:${process.env.API_PORT || 3001}/api/auth/me`, {
+      const profileRes = await axios.get(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       }).catch(() => null);
       
       const steamId = profileRes?.data?.steamId;
       if (steamId) {
-        axios.post(`http://localhost:${process.env.API_PORT || 3001}/api/sync/steam-public`, {
+        axios.post(`${API_BASE_URL}/api/sync/steam-public`, {
           steamId,
           gameId: data.gameId,
           steamAppId: game.steamAppId.toString()
@@ -299,7 +304,7 @@ ipcMain.handle('auth:setToken', async (_, token: string | null) => {
   
   // Fetch user profile to get userId
   try {
-    const res = await axios.get(`http://localhost:${process.env.API_PORT || 3001}/api/auth/me`, {
+    const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const userId = res.data.id;
@@ -338,7 +343,7 @@ async function handleLaunch(gameId: string, options?: { forceExe?: boolean }) {
       const token = store.get('token');
       if (token) {
         try {
-          const res = await axios.get(`http://localhost:${process.env.API_PORT || 3001}/api/games/${gameId}`, {
+          const res = await axios.get(`${API_BASE_URL}/api/games/${gameId}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           
@@ -496,7 +501,7 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
     if (token) {
       try {
         log.info('[Main] Attempting to recover userId via API...');
-        const res = await axios.get(`http://localhost:${process.env.API_PORT || 3001}/api/auth/me`, {
+        const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         userId = res.data.id;
@@ -584,7 +589,7 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
       // SYNC TO CENTRAL API
       const token = store.get('token');
       if (token) {
-        axios.post(`http://localhost:${process.env.API_PORT || 3001}/api/games`, {
+        axios.post(`${API_BASE_URL}/api/games`, {
           title: game.name,
           exePath: game.exePath,
           source: game.source,
@@ -608,7 +613,7 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
   // Trigger API hydration
   const token = store.get('token');
   if (token) {
-    axios.get(`http://localhost:${process.env.API_PORT || 3001}/api/games/hydrate-all`, {
+    axios.get(`${API_BASE_URL}/api/games/hydrate-all`, {
       headers: { Authorization: `Bearer ${token}` }
     }).catch(() => {});
   }
@@ -620,7 +625,7 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
 ipcMain.handle('sync:steam', async (_, { steamId, apiKey }) => {
   const userId = store.get('userId');
   try {
-    const res = await axios.post(`http://localhost:${process.env.API_PORT || 3001}/api/sync/steam`, {
+    const res = await axios.post(`${API_BASE_URL}/api/sync/steam`, {
       userId, steamId, apiKey
     });
     store.set('last_steam_sync', Date.now());
@@ -638,7 +643,7 @@ ipcMain.handle('sync:localAchievements', async (_, { gameId, exePath }) => {
 
 ipcMain.handle('api:getUsage', async () => {
   try {
-    const res = await axios.get(`http://localhost:${process.env.API_PORT || 3001}/api/admin/usage`);
+    const res = await axios.get(`${API_BASE_URL}/api/admin/usage`);
     return res.data;
   } catch {
     return { rawgDaily: 0, rawgMonthly: 0, cacheSize: 0, isOnline: false };
@@ -646,55 +651,7 @@ ipcMain.handle('api:getUsage', async () => {
 });
 
 // ── App Lifecycle ─────────────────────────────
-import { fork } from 'child_process';
-
-let apiProcess: any = null;
-let webProcess: any = null;
-
-function startBackgroundServices() {
-  if (!app.isPackaged) {
-    log.info('[BackgroundServices] Dev mode detected, skipping background process spawning.');
-    return;
-  }
-
-  const dbPath = path.join(app.getPath('userData'), 'gamevault.db').replace(/\\/g, '/');
-  
-  const baseEnv = {
-    ...process.env,
-    DATABASE_LOCAL_URL: `file:${dbPath}`,
-    DATABASE_URL: `file:${dbPath}`, // Fallback for Prisma
-    ELECTRON_RUN_AS_NODE: '1'
-  };
-
-  try {
-    const apiScript = path.join(app.getAppPath(), 'apps/api/dist/index.js');
-    log.info(`[BackgroundServices] Starting API server from ${apiScript}`);
-    apiProcess = fork(apiScript, [], { env: baseEnv, stdio: 'pipe' });
-    apiProcess.stdout?.on('data', (d: any) => log.info(`[API] ${d.toString().trim()}`));
-    apiProcess.stderr?.on('data', (d: any) => log.error(`[API Error] ${d.toString().trim()}`));
-  } catch (err: any) {
-    log.error(`[BackgroundServices] Failed to spawn API: ${err.message}`);
-  }
-
-  try {
-    // In standalone mode with workspaces, server.js is nested
-    const webScript = path.join(app.getAppPath(), 'apps/web/.next/standalone/apps/web/server.js');
-    log.info(`[BackgroundServices] Starting Web server from ${webScript}`);
-    webProcess = fork(webScript, [], { 
-      env: { ...baseEnv, PORT: '3000', HOSTNAME: '127.0.0.1' }, 
-      stdio: 'pipe' 
-    });
-    webProcess.stdout?.on('data', (d: any) => log.info(`[WEB] ${d.toString().trim()}`));
-    webProcess.stderr?.on('data', (d: any) => log.error(`[WEB Error] ${d.toString().trim()}`));
-  } catch (err: any) {
-    log.error(`[BackgroundServices] Failed to spawn Web: ${err.message}`);
-  }
-}
-
 app.whenReady().then(() => {
-  // Spawn production background services
-  startBackgroundServices();
-
   // Initialize components after ready
   overlay = new TrophyOverlay();
   
@@ -731,7 +688,7 @@ app.whenReady().then(() => {
     if (isGamingMode) return; // Skip during active gaming sessions
     let online = false;
     try {
-      const res = await axios.get(`http://localhost:${process.env.API_PORT || 3001}/api/health`);
+      const res = await axios.get(`${API_BASE_URL}/api/health`);
       online = res.status === 200;
     } catch {}
 
@@ -746,13 +703,4 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   // Keep app running in tray
-});
-
-app.on('will-quit', () => {
-  if (apiProcess) {
-    apiProcess.kill();
-  }
-  if (webProcess) {
-    webProcess.kill();
-  }
 });
