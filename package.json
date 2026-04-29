@@ -1,0 +1,39 @@
+{
+  "name": "gamevault",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GameVault – Universal Game Tracker & Library Manager",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:desktop": "concurrently -k -p \"[{name}]\" -n \"WEB,API,DESK\" -c \"magenta,cyan,blue\" \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:desktop-only\"",
+    "dev:desktop-only": "npm run dev --workspace=apps/desktop",
+    "package": "npm run build:all && electron-builder --config electron-builder.config.js",
+    "build:all": "npm run build:api && npm run build:web && npm run build:desktop",
+    "build:production": "npm run build:all && electron-builder --config electron-builder.config.js",
+    "build:clean": "rimraf apps/web/.next apps/api/dist apps/desktop/dist D:/GAMEVAULT-dist",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "build:desktop": "npm run build --workspace=apps/desktop",
+    "db:generate": "npx prisma generate --schema=database/schema.prisma",
+    "db:migrate": "npx prisma migrate dev --schema=database/schema.prisma",
+    "db:push": "npx prisma db push --schema=database/schema.prisma",
+    "db:seed": "npx tsx database/seed.ts",
+    "db:studio": "npx prisma studio --schema=database/schema.prisma",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

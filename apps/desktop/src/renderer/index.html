@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>GameVault — Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        background: #030308;
+        color: #e2e8f0;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── Header ── */
+      .header {
+        background: linear-gradient(180deg, #08081a 0%, #0c0c1d 100%);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid rgba(139, 92, 246, 0.12);
+        -webkit-app-region: drag;
+        position: relative;
+      }
+
+      .header::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+      }
+
+      .brand-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #8b5cf6, #a855f7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 20px rgba(139, 92, 246, 0.35);
+        flex-shrink: 0;
+      }
+
+      .brand-icon svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: white;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .brand-text {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .brand-name {
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+        color: white;
+      }
+
+      .brand-sub {
+        font-size: 8px;
+        font-weight: 700;
+        color: rgba(139, 92, 246, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        margin-top: -1px;
+      }
+
+      /* ── Content ── */
+      .content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 24px;
+        position: relative;
+      }
+
+      /* ── Background Glow ── */
+      .bg-glow {
+        position: absolute;
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        background: rgba(139, 92, 246, 0.06);
+        filter: blur(80px);
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        animation: breathe 4s ease-in-out infinite;
+      }
+
+      @keyframes breathe {
+        0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.95); }
+        50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
+      }
+
+      /* ── Orb ── */
+      .orb-container {
+        position: relative;
+        width: 90px;
+        height: 90px;
+        margin-bottom: 28px;
+      }
+
+      .orb-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        border-top-color: #8b5cf6;
+        border-right-color: rgba(139, 92, 246, 0.3);
+        animation: spin 4s linear infinite;
+      }
+
+      .orb-ring-inner {
+        position: absolute;
+        inset: 8px;
+        border-radius: 50%;
+        border: 1.5px solid transparent;
+        border-bottom-color: #a855f7;
+        border-left-color: rgba(168, 85, 247, 0.3);
+        animation: spin-reverse 3s linear infinite;
+      }
+
+      .orb-core {
+        position: absolute;
+        inset: 20px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 35%, #c084fc, #8b5cf6, #6d28d9);
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
+        animation: pulse 2.5s ease-in-out infinite alternate;
+      }
+
+      .orb-diamond {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 8px;
+        height: 8px;
+        background: white;
+        transform: translate(-50%, -50%) rotate(45deg);
+        box-shadow: 0 0 15px white, 0 0 30px rgba(139, 92, 246, 0.6);
+        animation: diamond-spin 4s ease-in-out infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes spin-reverse { to { transform: rotate(-360deg); } }
+      @keyframes pulse {
+        0% { transform: scale(0.9); box-shadow: 0 0 20px rgba(139, 92, 246, 0.2); }
+        100% { transform: scale(1.05); box-shadow: 0 0 40px rgba(139, 92, 246, 0.5); }
+      }
+      @keyframes diamond-spin {
+        0%, 100% { transform: translate(-50%, -50%) rotate(45deg) scale(1); }
+        50% { transform: translate(-50%, -50%) rotate(225deg) scale(1.2); }
+      }
+
+      /* ── Status ── */
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        background: rgba(139, 92, 246, 0.08);
+        border: 1px solid rgba(139, 92, 246, 0.15);
+        margin-bottom: 16px;
+      }
+
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 8px #34d399;
+        animation: blink 2s ease-in-out infinite;
+      }
+
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+
+      .status-text {
+        font-size: 10px;
+        font-weight: 800;
+        color: rgba(139, 92, 246, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+      }
+
+      .info-text {
+        font-size: 12px;
+        color: #475569;
+        text-align: center;
+        line-height: 1.6;
+        max-width: 220px;
+      }
+
+      /* ── Accent Line ── */
+      .accent-line {
+        width: 120px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24">
+          <line x1="6" y1="12" x2="10" y2="12"></line>
+          <line x1="8" y1="10" x2="8" y2="14"></line>
+          <line x1="15" y1="13" x2="15.01" y2="13"></line>
+          <line x1="18" y1="11" x2="18.01" y2="11"></line>
+          <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">GameVault</span>
+        <span class="brand-sub">Desktop Tracker</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="bg-glow"></div>
+
+      <div class="orb-container">
+        <div class="orb-ring"></div>
+        <div class="orb-ring-inner"></div>
+        <div class="orb-core"></div>
+        <div class="orb-diamond"></div>
+      </div>
+
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        <span class="status-text">Engine Active</span>
+      </div>
+
+      <p class="info-text">
+        Performance tracker is running silently.<br/>
+        Monitoring for games with zero overhead.
+      </p>
+
+      <div class="accent-line"></div>
+    </div>
+  </body>
+</html>
