@@ -77,3 +77,6 @@ temp/
 
 # Gemini brain (AI context)
 .gemini/
+
+# Certificates
+*.pfx

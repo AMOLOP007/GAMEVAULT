@@ -646,7 +646,55 @@ ipcMain.handle('api:getUsage', async () => {
 });
 
 // ── App Lifecycle ─────────────────────────────
+import { fork } from 'child_process';
+
+let apiProcess: any = null;
+let webProcess: any = null;
+
+function startBackgroundServices() {
+  if (!app.isPackaged) {
+    log.info('[BackgroundServices] Dev mode detected, skipping background process spawning.');
+    return;
+  }
+
+  const dbPath = path.join(app.getPath('userData'), 'gamevault.db').replace(/\\/g, '/');
+  
+  const baseEnv = {
+    ...process.env,
+    DATABASE_LOCAL_URL: `file:${dbPath}`,
+    DATABASE_URL: `file:${dbPath}`, // Fallback for Prisma
+    ELECTRON_RUN_AS_NODE: '1'
+  };
+
+  try {
+    const apiScript = path.join(app.getAppPath(), 'apps/api/dist/index.js');
+    log.info(`[BackgroundServices] Starting API server from ${apiScript}`);
+    apiProcess = fork(apiScript, [], { env: baseEnv, stdio: 'pipe' });
+    apiProcess.stdout?.on('data', (d: any) => log.info(`[API] ${d.toString().trim()}`));
+    apiProcess.stderr?.on('data', (d: any) => log.error(`[API Error] ${d.toString().trim()}`));
+  } catch (err: any) {
+    log.error(`[BackgroundServices] Failed to spawn API: ${err.message}`);
+  }
+
+  try {
+    // In standalone mode with workspaces, server.js is nested
+    const webScript = path.join(app.getAppPath(), 'apps/web/.next/standalone/apps/web/server.js');
+    log.info(`[BackgroundServices] Starting Web server from ${webScript}`);
+    webProcess = fork(webScript, [], { 
+      env: { ...baseEnv, PORT: '3000', HOSTNAME: '127.0.0.1' }, 
+      stdio: 'pipe' 
+    });
+    webProcess.stdout?.on('data', (d: any) => log.info(`[WEB] ${d.toString().trim()}`));
+    webProcess.stderr?.on('data', (d: any) => log.error(`[WEB Error] ${d.toString().trim()}`));
+  } catch (err: any) {
+    log.error(`[BackgroundServices] Failed to spawn Web: ${err.message}`);
+  }
+}
+
 app.whenReady().then(() => {
+  // Spawn production background services
+  startBackgroundServices();
+
   // Initialize components after ready
   overlay = new TrophyOverlay();
   
@@ -698,4 +746,13 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   // Keep app running in tray
+});
+
+app.on('will-quit', () => {
+  if (apiProcess) {
+    apiProcess.kill();
+  }
+  if (webProcess) {
+    webProcess.kill();
+  }
 });

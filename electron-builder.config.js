@@ -69,7 +69,9 @@ module.exports = {
     ],
     icon: 'apps/desktop/assets/icon.ico',
     // Sign the executable (requires certificate)
-    // signingHashAlgorithms: ['sha256'],
+    certificateFile: 'gamevault-cert.pfx',
+    certificatePassword: 'gamevault',
+    signingHashAlgorithms: ['sha256'],
   },
 
   nsis: {
