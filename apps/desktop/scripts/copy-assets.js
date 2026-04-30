@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+const fs = require('fs');
+const path = require('path');
 
 const files = [
   { src: 'src/main/preload.cjs', dest: 'dist/main/preload.cjs' },
@@ -15,7 +15,8 @@ files.forEach(f => {
   console.log(`Copied ${f.src} to ${f.dest}`);
 });
 
-// Fix ESM for packaged app
+// Remove any lingering package.json from previous ESM attempts
 const mainPkgPath = path.join('dist/main', 'package.json');
-fs.writeFileSync(mainPkgPath, JSON.stringify({ type: 'module' }));
-console.log(`Created ${mainPkgPath} to enable ESM in production`);
+if (fs.existsSync(mainPkgPath)) {
+  fs.unlinkSync(mainPkgPath);
+}
