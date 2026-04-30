@@ -304,7 +304,7 @@ function SteamSyncModal({ onClose, onSynced, games, initialSteamId }: {
         
         setStatus(`Syncing ${g.title}...`);
         try {
-          const response = await api.post('/api/sync/steam-public', {
+          const response = await api.post<any>('/api/sync/steam-public', {
             steamId: cleanedId,
             gameId: g.gameId,
             steamAppId: g.steamAppId.toString()

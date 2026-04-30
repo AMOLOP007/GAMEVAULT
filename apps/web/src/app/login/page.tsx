@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,7 +20,7 @@ const XboxLogoSVG = () => (
   </svg>
 );
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isElectron = searchParams.get('electron') === 'true';
@@ -346,5 +346,13 @@ export default function LoginPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#030308] flex items-center justify-center"><Loader2 className="w-8 h-8 text-[#8b5cf6] animate-spin" /></div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
