@@ -59,16 +59,13 @@ module.exports = {
         arch: ['x64'],
       }
     ],
-    icon: 'apps/desktop/assets/icon.ico',
+    icon: 'apps/desktop/assets/icon.png',
   },
 
   nsis: {
     oneClick: false,
     perMachine: true,
     allowToChangeInstallationDirectory: true,
-    installerIcon: 'apps/desktop/assets/icon.ico',
-    uninstallerIcon: 'apps/desktop/assets/icon.ico',
-    installerHeaderIcon: 'apps/desktop/assets/icon.ico',
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     shortcutName: 'GameVault',
