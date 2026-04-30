@@ -114,6 +114,39 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     return userGame;
   });
 
+  // DELETE /api/games/:id
+  fastify.delete('/:id', async (request: any, reply) => {
+    const userId = request.user.sub;
+    const { id } = request.params;
+
+    // The ID could be a Game ID or a UserGame ID.
+    // Try finding by Game ID first as it's the standard for the frontend.
+    const userGame = await prisma.userGame.findUnique({
+      where: { userId_gameId: { userId, gameId: id } }
+    });
+
+    if (!userGame) {
+      // Try finding by UserGame ID as a fallback
+      const ugById = await prisma.userGame.findUnique({
+        where: { id }
+      });
+      
+      if (!ugById || ugById.userId !== userId) {
+        return reply.code(404).send({ error: 'Game not found in your vault' });
+      }
+      
+      // Found by UserGame ID
+      await prisma.externalLink.deleteMany({ where: { userGameId: ugById.id } });
+      await prisma.userGame.delete({ where: { id: ugById.id } });
+    } else {
+      // Found by Game ID
+      await prisma.externalLink.deleteMany({ where: { userGameId: userGame.id } });
+      await prisma.userGame.delete({ where: { id: userGame.id } });
+    }
+
+    return { success: true, message: 'Game removed from vault' };
+  });
+
   // DELETE /api/games/clear
   fastify.delete('/clear', async (request: any, reply) => {
     const userId = request.user.sub;

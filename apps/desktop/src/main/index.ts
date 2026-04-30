@@ -500,15 +500,15 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
   log.info(`[Main] DB URL set: ${!!process.env.DATABASE_URL}`);
   
   let userId = store.get('userId');
+  let currentToken = store.get('token');
   
   // If userId is missing or empty, try to get it from token one last time
   if (!userId || userId === '') {
-    const token = store.get('token');
-    if (token) {
+    if (currentToken) {
       try {
         log.info('[Main] Attempting to recover userId via API...');
         const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${currentToken}` }
         });
         userId = res.data.id;
         store.set('userId', userId);
@@ -518,8 +518,11 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
         if (err.response?.status === 401) {
           store.delete('token');
           store.delete('userId');
+          currentToken = null;
         }
       }
+    }
+  }
 
   if (!userId || userId === '') {
     log.error('[Main] Cannot save games: No valid userId found.');
@@ -595,8 +598,7 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
       });
 
       // SYNC TO CENTRAL API
-      const token = store.get('token');
-      if (token) {
+      if (currentToken) {
         axios.post(`${API_BASE_URL}/api/games`, {
           title: game.name,
           exePath: game.exePath,
@@ -607,7 +609,7 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
           gogAppId: game.gogAppId,
           coverUrl: game.coverUrl, // If available
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${currentToken}` }
         }).catch(err => log.error(`[Main] API Sync failed for ${game.name}: ${err.message}`));
       }
 
@@ -619,10 +621,9 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
   }
 
   // Trigger API hydration
-  const token = store.get('token');
-  if (token) {
+  if (currentToken) {
     axios.get(`${API_BASE_URL}/api/games/hydrate-all`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${currentToken}` }
     }).catch(() => {});
   }
   
