@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { formatPlaytime, formatDate, getStatusBadgeClass } from '@/lib/utils';
 import ProgressRing from '@/components/ui/ProgressRing';
 import {
-  ArrowLeft, Clock, Star, Heart, ExternalLink, Link2, Gamepad2, Play
+  ArrowLeft, Clock, Star, Heart, ExternalLink, Link2, Gamepad2, Play, Trophy
 } from 'lucide-react';
 
 export default function GameDetailsPage() {
