@@ -349,12 +349,16 @@ export default function LandingPage() {
             <span className="text-2xl font-black tracking-tighter uppercase italic">GAMEVAULT</span>
           </div>
           <div className="flex gap-12 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
-            {['Twitter', 'Discord', 'Github', 'Privacy'].map(link => (
+            {['Reddit', 'Discord', 'Github', 'Privacy'].map(link => (
               <a 
                 key={link} 
-                href={link === 'Github' ? 'https://github.com/AMOLOP007' : '#'} 
-                target={link === 'Github' ? '_blank' : undefined}
-                rel={link === 'Github' ? 'noopener noreferrer' : undefined}
+                href={
+                  link === 'Github' ? 'https://github.com/AMOLOP007' : 
+                  link === 'Privacy' ? '/privacy' : 
+                  link === 'Reddit' ? 'https://reddit.com/r/gamevault' : '#'
+                } 
+                target={link === 'Privacy' ? undefined : '_blank'}
+                rel={link === 'Privacy' ? undefined : 'noopener noreferrer'}
                 className="hover:text-white transition-colors no-underline"
               >
                 {link}

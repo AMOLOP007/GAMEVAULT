@@ -132,4 +132,131 @@ export default async function socialRoutes(fastify: FastifyInstance) {
       data: { status: 'ACCEPTED' }
     });
   });
+
+  /**
+   * POST /api/social/friends/reject
+   * Rejects or cancels a friend request / Unfriends
+   */
+  fastify.post('/friends/reject', async (request: any) => {
+    const { userId, targetId } = request.body;
+    return await prisma.friend.deleteMany({
+      where: {
+        OR: [
+          { userId, friendId: targetId },
+          { userId: targetId, friendId: userId }
+        ]
+      }
+    });
+  });
+
+  /**
+   * GET /api/social/users/search
+   * Searches for users by username
+   */
+  fastify.get('/users/search', async (request: any) => {
+    const { query, currentUserId } = request.query;
+    if (!query || query.length < 2) return [];
+
+    const users = await prisma.user.findMany({
+      where: {
+        username: { contains: query },
+        NOT: { id: currentUserId }
+      },
+      select: {
+        id: true,
+        username: true,
+        avatarUrl: true,
+        createdAt: true
+      },
+      take: 10
+    });
+
+    // Check relationship status for each user
+    const userIds = users.map(u => u.id);
+    const relationships = await prisma.friend.findMany({
+      where: {
+        OR: [
+          { userId: currentUserId, friendId: { in: userIds } },
+          { userId: { in: userIds }, friendId: currentUserId }
+        ]
+      }
+    });
+
+    return users.map(u => {
+      const rel = relationships.find(r => r.userId === u.id || r.friendId === u.id);
+      let status = 'NONE';
+      if (rel) {
+        if (rel.status === 'ACCEPTED') status = 'FRIEND';
+        else if (rel.userId === currentUserId) status = 'SENT';
+        else status = 'PENDING';
+      }
+      return { ...u, relationship: status };
+    });
+  });
+
+  /**
+   * GET /api/social/friends/profile/:friendId
+   * Returns a friend's in-app stats and trophies
+   */
+  fastify.get('/friends/profile/:friendId', async (request: any, reply) => {
+    const { friendId } = request.params;
+    const { userId } = request.query; // Current user
+
+    // Verify friendship
+    const friendship = await prisma.friend.findFirst({
+      where: {
+        OR: [
+          { userId, friendId, status: 'ACCEPTED' },
+          { userId: friendId, friendId: userId, status: 'ACCEPTED' }
+        ]
+      }
+    });
+
+    if (!friendship) {
+      return reply.status(403).send({ error: 'You are not friends with this user' });
+    }
+
+    const friend = await prisma.user.findUnique({
+      where: { id: friendId },
+      select: {
+        id: true,
+        username: true,
+        avatarUrl: true,
+        createdAt: true,
+        _count: {
+          select: {
+            games: true,
+            achievements: true,
+            badges: true
+          }
+        }
+      }
+    });
+
+    // Get in-app trophies only
+    const trophies = await prisma.userAchievement.findMany({
+      where: { userId: friendId },
+      include: {
+        achievement: true
+      },
+      orderBy: { earnedAt: 'desc' },
+      take: 20
+    });
+
+    // Get most played games (in-app stats)
+    const games = await prisma.userGame.findMany({
+      where: { userId: friendId },
+      include: {
+        game: { select: { title: true, coverUrl: true } }
+      },
+      orderBy: { totalPlaytime: 'desc' },
+      take: 5
+    });
+
+    return {
+      profile: friend,
+      trophies,
+      games
+    };
+  });
 }

@@ -12,20 +12,27 @@ interface StatCardProps {
   delay?: number;
 }
 
-export default function StatCard({ label, value, suffix = '', icon, color, delay = 0 }: StatCardProps) {
-  const [displayValue, setDisplayValue] = useState(0);
+export default function StatCard({ label, value, suffix = '', icon, color, delay = 0 }: StatCardProps | { label: string; value: string | number; suffix?: string; icon: React.ReactNode; color: string; delay?: number }) {
+  const isNumeric = typeof value === 'number';
+  const [displayValue, setDisplayValue] = useState<string | number>(isNumeric ? 0 : value);
 
-  // Count up animation
+  // Count up animation (only for numbers)
   const spring = useSpring(0, { stiffness: 50, damping: 20 });
   const count = useTransform(spring, (val) => Math.floor(val));
 
   useEffect(() => {
-    spring.set(value);
-  }, [value, spring]);
+    if (isNumeric) {
+      spring.set(value as number);
+    } else {
+      setDisplayValue(value);
+    }
+  }, [value, spring, isNumeric]);
 
   useEffect(() => {
-    return count.onChange((v) => setDisplayValue(v));
-  }, [count]);
+    if (isNumeric) {
+      return count.on('change', (v) => setDisplayValue(v));
+    }
+  }, [count, isNumeric]);
 
   return (
     <motion.div
