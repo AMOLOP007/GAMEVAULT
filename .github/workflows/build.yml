@@ -26,8 +26,9 @@ jobs:
         run: npm run build:web
         env:
           NEXT_PUBLIC_API_URL: https://gamevault-j05d.onrender.com
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: https://jvsnjxvjkhbvlsdmsull.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2c25qeHZqa2hidmxzZG1zdWxsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNzg2NTMsImV4cCI6MjA5Mjc1NDY1M30.hpJdbwDo7pDFGSzZCnraEZ7Jubz5yhA8cI9z8PNMiJk
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: 273551883039-ho1lhu1jbclqbhqeg73l8eoqqir1sa9g.apps.googleusercontent.com
 
       - name: Build API & Desktop
         run: |
