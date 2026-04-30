@@ -45,8 +45,8 @@ export default function SocialPage() {
   const loadSocialData = async () => {
     try {
       const [f, p] = await Promise.all([
-        api.get(`/api/social/friends/${user?.id}`),
-        api.get(`/api/social/friends/pending/${user?.id}`)
+        api.get<any[]>(`/api/social/friends/${user?.id}`),
+        api.get<any[]>(`/api/social/friends/pending/${user?.id}`)
       ]);
       setFriends(f);
       setPending(p);
@@ -59,7 +59,7 @@ export default function SocialPage() {
     if (searchQuery.length < 2) return;
     setIsSearching(true);
     try {
-      const res = await api.get(`/api/social/users/search?query=${searchQuery}&currentUserId=${user?.id}`);
+      const res = await api.get<any[]>(`/api/social/users/search?query=${searchQuery}&currentUserId=${user?.id}`);
       setSearchResults(res);
       setActiveTab('search');
     } catch (err) {
@@ -359,7 +359,7 @@ export default function SocialPage() {
                          {friendProfile.games.map((ug: any) => (
                            <div key={ug.id} className="flex items-center gap-5 p-3 rounded-xl hover:bg-white/[0.03] transition-all group">
                               <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 shrink-0">
-                                 <SafeImage src={ug.game.coverUrl} className="w-full h-full object-cover" />
+                                 <SafeImage src={ug.game.coverUrl} alt={ug.game.title} className="w-full h-full object-cover" />
                               </div>
                               <div className="flex-1 min-w-0">
                                  <p className="text-sm font-black text-white truncate group-hover:text-[#c084fc] transition-colors">{ug.game.title}</p>
