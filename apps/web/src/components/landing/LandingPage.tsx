@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
+import React, { useRef } from 'react';
+import { motion, useScroll, useTransform, useSpring, AnimatePresence } from 'framer-motion';
 import { 
   Download, 
   Gamepad2, 
@@ -62,14 +62,20 @@ const floatVariants = {
 };
 
 export default function LandingPage() {
-  const { scrollY } = useScroll();
-  const rotateX = useTransform(scrollY, [0, 1000], [0, 20]);
-  const scale = useTransform(scrollY, [0, 500], [1, 0.95]);
+  const containerRef = useRef(null);
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end end"]
+  });
+
+  const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30 });
+  const scale = useTransform(smoothProgress, [0, 0.2], [1, 0.9]);
+  const opacity = useTransform(smoothProgress, [0, 0.1], [1, 0]);
 
   const DOWNLOAD_URL = "https://github.com/AMOLOP007/GAMEVAULT/releases/download/v1.0.2/GameVault-Setup-1.0.2.exe";
 
   return (
-    <div className="bg-[#030308] text-white selection:bg-[#8b5cf6]/50 overflow-x-hidden font-sans">
+    <div ref={containerRef} className="bg-[#030308] text-white selection:bg-[#8b5cf6]/50 overflow-x-hidden font-sans">
       {/* ── Fixed Navigation ── */}
       <nav className="fixed top-0 w-full z-[100] border-b border-white/5 bg-[#030308]/60 backdrop-blur-2xl">
         <div className="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
@@ -129,18 +135,19 @@ export default function LandingPage() {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
+            style={{ scale, opacity }}
             className="relative z-10 text-center max-w-5xl"
           >
             <motion.div 
               variants={itemVariants}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-[#8b5cf6]/10 border border-[#8b5cf6]/20 text-[#c084fc] text-[9px] font-black uppercase tracking-[0.4em] mb-12"
             >
-              <Sparkles className="w-3 h-3" /> Redefining the Library
+              <Sparkles className="w-3 h-3" /> System Operational v1.0.2
             </motion.div>
 
             <motion.h1 
               variants={itemVariants}
-              className="text-7xl md:text-[10rem] font-black tracking-tighter leading-[0.8] mb-10 perspective-1000"
+              className="text-7xl md:text-[10rem] font-black tracking-tighter leading-[0.8] mb-10"
             >
               UNIFY <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#8b5cf6] via-[#d946ef] to-[#3b82f6] italic">
@@ -152,8 +159,8 @@ export default function LandingPage() {
               variants={itemVariants}
               className="text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto mb-16 leading-relaxed"
             >
-              The ultimate command center for modern gamers. One vault for all your achievements, playtime, and collections. 
-            </p>
+              One vault for all your achievements, playtime, and collections. The ultimate command center for modern gamers.
+            </motion.p>
 
             <motion.div variants={itemVariants} className="flex justify-center">
               <AnimatedButton 
@@ -162,14 +169,14 @@ export default function LandingPage() {
                 className="px-16 h-20 text-2xl font-black uppercase tracking-tighter shadow-[0_30px_100px_rgba(139,92,246,0.5)] group relative overflow-hidden"
               >
                 <span className="relative z-10 flex items-center gap-4">
-                  <Download className="w-7 h-7" /> Launch Setup v1.0.2
+                  <Download className="w-7 h-7" /> Launch Setup
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] opacity-0 group-hover:opacity-100 transition-opacity" />
               </AnimatedButton>
             </motion.div>
           </motion.div>
 
-          {/* Floating HUD Elements (No App Previews) */}
+          {/* Floating HUD Elements */}
           <div className="absolute inset-0 pointer-events-none hidden lg:block">
             <motion.div 
               variants={floatVariants}
@@ -196,9 +203,9 @@ export default function LandingPage() {
             <motion.div 
               animate={{ rotate: 360 }}
               transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-              className="absolute top-[60%] right-[15%] w-32 h-32 border-2 border-dashed border-[#8b5cf6]/20 rounded-full flex items-center justify-center"
+              className="absolute top-[60%] right-[15%] w-32 h-32 border-2 border-dashed border-[#8b5cf6]/20 rounded-full flex items-center justify-center opacity-20"
             >
-              <Cpu className="w-8 h-8 text-[#8b5cf6]/40" />
+              <Cpu className="w-8 h-8 text-[#8b5cf6]" />
             </motion.div>
           </div>
         </section>
@@ -220,42 +227,12 @@ export default function LandingPage() {
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {[
-                {
-                  icon: Zap,
-                  title: "Hyper-Tracking",
-                  desc: "Zero manual logging. Our low-level driver monitors playtime with surgical precision and zero lag.",
-                  color: "#8b5cf6"
-                },
-                {
-                  icon: Shield,
-                  title: "Local Isolation",
-                  desc: "Your data stays in your vault. Local-first architecture ensures speed and total privacy.",
-                  color: "#3b82f6"
-                },
-                {
-                  icon: Fingerprint,
-                  title: "System Discovery",
-                  desc: "Automatic system scan detects installed games across every drive and launcher instantly.",
-                  color: "#d946ef"
-                },
-                {
-                  icon: Globe,
-                  title: "Unified Cloud",
-                  desc: "Sync your library across devices seamlessly while maintaining local performance.",
-                  color: "#34d399"
-                },
-                {
-                  icon: BarChart3,
-                  title: "Data Alchemy",
-                  desc: "Transform your raw gaming hours into beautiful interactive analytics and heatmaps.",
-                  color: "#fbbf24"
-                },
-                {
-                  icon: Rocket,
-                  title: "Ultra Minimal",
-                  desc: "Clean, distraction-free interface designed for performance and aesthetic excellence.",
-                  color: "#f87171"
-                }
+                { icon: Zap, t: "Hyper-Tracking", d: "Zero manual logging. Low-level precision.", c: "#8b5cf6" },
+                { icon: Shield, t: "Local Isolation", d: "Your data stays in your vault. Total privacy.", c: "#3b82f6" },
+                { icon: Fingerprint, t: "System Scan", d: "Detects installed games across all drives.", c: "#d946ef" },
+                { icon: Globe, t: "Unified Cloud", d: "Sync seamlessly while maintaining performance.", c: "#34d399" },
+                { icon: BarChart3, t: "Data Alchemy", d: "Transform hours into beautiful analytics.", c: "#fbbf24" },
+                { icon: Rocket, t: "Ultra Minimal", d: "Clean, distraction-free performance UI.", c: "#f87171" }
               ].map((f, i) => (
                 <motion.div
                   key={i}
@@ -264,21 +241,20 @@ export default function LandingPage() {
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
                   whileHover={{ y: -10, scale: 1.02 }}
-                  className="p-10 rounded-[2.5rem] bg-white/[0.02] border border-white/5 hover:border-[#8b5cf6]/40 transition-all cursor-default group overflow-hidden relative"
+                  className="p-10 rounded-[2.5rem] bg-white/[0.02] border border-white/5 hover:border-[#8b5cf6]/40 transition-all group relative overflow-hidden"
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/[0.01] -translate-y-1/2 translate-x-1/2 rounded-full blur-3xl group-hover:bg-[#8b5cf6]/10 transition-all" />
-                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-8 border border-white/10 group-hover:border-[#8b5cf6]/20 group-hover:bg-[#8b5cf6]/5 transition-all">
-                    <f.icon className="w-8 h-8" style={{ color: f.color }} />
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-8 border border-white/10 group-hover:bg-[#8b5cf6]/5 transition-all">
+                    <f.icon className="w-8 h-8" style={{ color: f.c }} />
                   </div>
-                  <h3 className="text-2xl font-black mb-4 uppercase tracking-tight italic">{f.title}</h3>
-                  <p className="text-slate-500 font-medium leading-relaxed">{f.desc}</p>
+                  <h3 className="text-2xl font-black mb-4 uppercase tracking-tight italic">{f.t}</h3>
+                  <p className="text-slate-500 font-medium leading-relaxed">{f.d}</p>
                 </motion.div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ── Intelligence / System Section ── */}
+        {/* ── Intelligence Section ── */}
         <section id="intelligence" className="py-40 relative bg-[#0c0c1d]/40 border-y border-white/5 overflow-hidden">
           <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-32 items-center">
             <div className="relative">
@@ -288,8 +264,7 @@ export default function LandingPage() {
                 viewport={{ once: true }}
                 className="aspect-square glass-panel rounded-[3rem] border-[#8b5cf6]/20 flex flex-col items-center justify-center gap-8 relative overflow-hidden"
               >
-                 <div className="absolute inset-0 bg-gradient-to-br from-[#8b5cf6]/10 to-transparent" />
-                 <div className="w-32 h-32 rounded-[2rem] bg-white/5 border border-white/10 flex items-center justify-center animate-pulse">
+                 <div className="w-32 h-32 rounded-[2rem] bg-white/5 border border-white/10 flex items-center justify-center">
                     <Cpu className="w-16 h-16 text-[#8b5cf6]" />
                  </div>
                  <div className="space-y-3 w-2/3">
@@ -297,7 +272,6 @@ export default function LandingPage() {
                        <motion.div animate={{ x: ["-100%", "100%"] }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="h-full w-1/2 bg-gradient-to-r from-transparent via-[#8b5cf6] to-transparent" />
                     </div>
                     <div className="h-2 w-2/3 bg-white/5 rounded-full" />
-                    <div className="h-2 w-1/2 bg-white/5 rounded-full" />
                  </div>
               </motion.div>
             </div>
@@ -308,25 +282,19 @@ export default function LandingPage() {
                 <span className="text-[#8b5cf6]">INTELLIGENCE.</span>
               </h2>
               <p className="text-xl text-slate-400 font-medium mb-12 leading-relaxed">
-                GameVault scans your system architecture, identifies game binaries, and hydrates your library with high-resolution assets instantly.
+                Automatic system scans identifies game binaries and hydrates your library with high-res assets instantly.
               </p>
-              <div className="space-y-8">
+              <div className="space-y-6">
                 {[
-                  { t: "Automated Metadata", d: "Deep integration with global game databases." },
-                  { t: "Low-Level Tracking", d: "Hooks into system calls for zero performance impact." },
-                  { t: "Universal Discovery", d: "Supports Steam, Epic, GOG, and local executables." }
+                  { t: "Automated Metadata", d: "Global database integration." },
+                  { t: "Low-Level Tracking", d: "Zero performance impact." },
+                  { t: "Universal Discovery", d: "Supports all launchers." }
                 ].map((item, i) => (
-                  <motion.div 
-                    initial={{ x: 50, opacity: 0 }}
-                    whileInView={{ x: 0, opacity: 1 }}
-                    transition={{ delay: i * 0.1 }}
-                    key={i} 
-                    className="flex gap-4 items-start"
-                  >
+                  <motion.div key={i} className="flex gap-4 items-start">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6] mt-2" />
                     <div>
-                      <p className="font-black text-white text-lg uppercase tracking-tight italic">{item.t}</p>
-                      <p className="text-slate-500 font-medium">{item.d}</p>
+                      <p className="font-black text-white text-lg uppercase tracking-tight italic leading-none mb-1">{item.t}</p>
+                      <p className="text-slate-500 font-medium text-sm">{item.d}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -335,13 +303,12 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Community / Status ── */}
+        {/* ── Community Section ── */}
         <section id="community" className="py-40 relative px-6">
            <div className="max-w-7xl mx-auto text-center">
               <h2 className="text-6xl md:text-8xl font-black tracking-tighter uppercase mb-20 leading-[0.85]">
                 THE <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#34d399] to-[#3b82f6]">GLOBAL</span> <br /> VAULT.
               </h2>
-              
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                  {[
                    { l: "Activity Feed", i: Globe, c: "#3b82f6" },
@@ -349,11 +316,7 @@ export default function LandingPage() {
                    { l: "Global Stats", i: Activity, c: "#34d399" },
                    { l: "Community Hub", i: Users, c: "#8b5cf6" }
                  ].map((item, i) => (
-                   <motion.div 
-                     key={i}
-                     whileHover={{ scale: 1.05, borderColor: item.c + "40" }}
-                     className="glass-panel p-12 rounded-[2rem] border-white/5 flex flex-col items-center gap-6"
-                   >
+                   <motion.div key={i} className="glass-panel p-12 rounded-[2rem] border-white/5 flex flex-col items-center gap-6">
                       <item.i className="w-12 h-12" style={{ color: item.c }} />
                       <span className="text-xs font-black uppercase tracking-[0.3em]">{item.l}</span>
                    </motion.div>
@@ -363,87 +326,34 @@ export default function LandingPage() {
         </section>
 
         {/* ── Centerpiece CTA ── */}
-        <section className="py-60 relative px-6 overflow-hidden">
-           {/* Centerpiece FX */}
+        <section id="roadmap" className="py-60 relative px-6 overflow-hidden text-center">
            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-[#8b5cf6]/10 blur-[180px] rounded-full pointer-events-none" />
-           
-           <div className="max-w-4xl mx-auto relative z-10 text-center">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                className="space-y-12"
-              >
-                 <h2 className="text-7xl md:text-[8rem] font-black tracking-tighter uppercase leading-[0.8] mb-12 italic">
-                    START YOUR <br /> <span className="text-[#8b5cf6]">VAULT.</span>
-                 </h2>
-                 
-                 <div className="flex flex-col items-center gap-8">
-                    <AnimatedButton 
-                      size="lg" 
-                      onClick={() => window.location.href = DOWNLOAD_URL}
-                      className="px-20 h-24 text-3xl font-black uppercase tracking-tighter shadow-[0_40px_120px_rgba(139,92,246,0.6)] group relative overflow-hidden rounded-3xl"
-                    >
-                      <span className="relative z-10 flex items-center gap-6">
-                        Download for Windows <Download className="w-8 h-8" />
-                      </span>
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </AnimatedButton>
-                    
-                    <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">
-                      Version 1.0.2 Stable • Free Forever • Open Source
-                    </p>
-                 </div>
-              </motion.div>
-           </div>
-
-           {/* Floating Particles */}
-           {[...Array(20)].map((_, i) => (
-             <motion.div
-               key={i}
-               animate={{ 
-                 y: [0, -100, 0],
-                 x: [0, (Math.random() - 0.5) * 100, 0],
-                 opacity: [0, 0.5, 0]
-               }}
-               transition={{ 
-                 duration: 3 + Math.random() * 4, 
-                 repeat: Infinity,
-                 delay: Math.random() * 5
-               }}
-               className="absolute w-1 h-1 bg-[#8b5cf6] rounded-full blur-[1px] pointer-events-none"
-               style={{ 
-                 top: `${Math.random() * 100}%`, 
-                 left: `${Math.random() * 100}%` 
-               }}
-             />
-           ))}
+           <motion.div initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}>
+              <h2 className="text-7xl md:text-[8rem] font-black tracking-tighter uppercase leading-[0.8] mb-12 italic">
+                 START YOUR <br /> <span className="text-[#8b5cf6]">VAULT.</span>
+              </h2>
+              <div className="flex flex-col items-center gap-8">
+                 <AnimatedButton size="lg" onClick={() => window.location.href = DOWNLOAD_URL} className="px-20 h-24 text-3xl font-black uppercase tracking-tighter shadow-[0_40px_120px_rgba(139,92,246,0.6)]">
+                   Download Setup <Download className="ml-4 w-8 h-8" />
+                 </AnimatedButton>
+                 <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">v1.0.2 Stable • Free • Open Source</p>
+              </div>
+           </motion.div>
         </section>
       </main>
 
-      {/* ── Minimal Footer ── */}
       <footer className="py-20 border-t border-white/5 bg-black/40 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-12">
           <div className="flex items-center gap-4">
             <Command className="w-8 h-8 text-[#8b5cf6]" />
             <span className="text-2xl font-black tracking-tighter uppercase italic">GAMEVAULT</span>
           </div>
-          
-          <div className="flex gap-12">
+          <div className="flex gap-12 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
             {['Twitter', 'Discord', 'Github', 'Privacy'].map(link => (
-              <a 
-                key={link} 
-                href="#" 
-                className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 hover:text-white transition-colors no-underline"
-              >
-                {link}
-              </a>
+              <a key={link} href="#" className="hover:text-white transition-colors no-underline">{link}</a>
             ))}
           </div>
-
-          <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">
-            © 2026 GAMEVAULT SYSTEM • OPERATIONAL
-          </p>
+          <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">© 2026 GAMEVAULT SYSTEM • OPERATIONAL</p>
         </div>
       </footer>
     </div>
