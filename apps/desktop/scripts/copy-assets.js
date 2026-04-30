@@ -14,3 +14,8 @@ files.forEach(f => {
   fs.copyFileSync(f.src, f.dest);
   console.log(`Copied ${f.src} to ${f.dest}`);
 });
+
+// Fix ESM for packaged app
+const mainPkgPath = path.join('dist/main', 'package.json');
+fs.writeFileSync(mainPkgPath, JSON.stringify({ type: 'module' }));
+console.log(`Created ${mainPkgPath} to enable ESM in production`);
