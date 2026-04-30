@@ -350,7 +350,15 @@ export default function LandingPage() {
           </div>
           <div className="flex gap-12 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
             {['Twitter', 'Discord', 'Github', 'Privacy'].map(link => (
-              <a key={link} href="#" className="hover:text-white transition-colors no-underline">{link}</a>
+              <a 
+                key={link} 
+                href={link === 'Github' ? 'https://github.com/AMOLOP007' : '#'} 
+                target={link === 'Github' ? '_blank' : undefined}
+                rel={link === 'Github' ? 'noopener noreferrer' : undefined}
+                className="hover:text-white transition-colors no-underline"
+              >
+                {link}
+              </a>
             ))}
           </div>
           <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">© 2026 GAMEVAULT SYSTEM • OPERATIONAL</p>

@@ -42,6 +42,7 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, '../../assets/icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -665,7 +666,8 @@ app.whenReady().then(() => {
   overlay = new TrophyOverlay();
   
   const iconPath = path.join(__dirname, '../../assets/icon.png');
-  tray = new Tray(nativeImage.createFromPath(iconPath));
+  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  tray = new Tray(trayIcon);
   
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Open GameVault', click: () => {
