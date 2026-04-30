@@ -8,8 +8,8 @@ import path from 'path';
 
 const execAsync = promisify(exec);
 
-const IDLE_POLL_MS = 5000;      // 5 seconds when idle
-const GAMING_POLL_MS = 10000;   // 10 seconds when active (more frequent for heartbeat)
+const IDLE_POLL_MS = 15000;     // 15 seconds when idle to save CPU
+const GAMING_POLL_MS = 30000;   // 30 seconds when active
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds heartbeat
 
 export interface TrackedSession {

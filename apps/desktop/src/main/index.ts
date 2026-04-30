@@ -21,9 +21,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ── Configuration ────────────────────────────────
-// In production, these should point to the centralized cloud service
-const API_BASE_URL = process.env.API_URL || (app.isPackaged ? 'https://gamevault-j05d.onrender.com' : 'http://localhost:3001');
-const WEB_BASE_URL = process.env.WEB_URL || (app.isPackaged ? 'https://gamevault-web-lejg.vercel.app' : 'http://localhost:3000');
+const isDev = !app.isPackaged;
+const API_BASE_URL = isDev ? 'http://localhost:3001' : (process.env.API_URL || 'https://gamevault-j05d.onrender.com');
+const WEB_BASE_URL = isDev ? 'http://localhost:3000' : (process.env.WEB_URL || 'https://gamevault-web-lejg.vercel.app');
 
 // ── Components ───────────────────────────────
 const detector = new PsListDetector();
@@ -158,7 +158,13 @@ async function autoScanAndSync(userId: string) {
         headers: { Authorization: `Bearer ${token}` }
       }).then(res => {
         log.info(`[AutoScan] Steam sync background complete: ${res.data.message}`);
-      }).catch(err => log.error(`[AutoScan] Steam sync failed: ${err.message}`));
+      }).catch(err => {
+        log.error(`[AutoScan] Steam sync failed: ${err.message}`);
+        if (err.response?.status === 401) {
+          store.delete('token');
+          store.delete('userId');
+        }
+      });
     }
     
     mainWindow?.webContents.send('library:updated');
@@ -508,10 +514,12 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
         store.set('userId', userId);
         log.info(`[Main] Recovered userId: ${userId}`);
       } catch (err: any) {
-        log.error(`[Main] Failed to recover userId during confirmDiscovery: ${err.message}`);
+        log.error(`[Main] Failed to recover userId: ${err.message}`);
+        if (err.response?.status === 401) {
+          store.delete('token');
+          store.delete('userId');
+        }
       }
-    }
-  }
 
   if (!userId || userId === '') {
     log.error('[Main] Cannot save games: No valid userId found.');

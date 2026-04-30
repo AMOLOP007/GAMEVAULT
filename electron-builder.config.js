@@ -13,6 +13,7 @@ module.exports = {
   appId: 'com.gamevault.app',
   productName: 'GameVault',
   copyright: 'Copyright © 2026 GameVault',
+  artifactName: 'GameVault-Setup-${version}.exe',
 
   directories: {
     output: 'release',
