@@ -29,7 +29,7 @@ export default function LandingPage() {
             <a href="#about" className="hover:text-[#c084fc] transition-colors">About</a>
           </div>
           <a
-            href="https://github.com/AMOLOP007/GAMEVAULT/releases/latest/download/GameVault%20Setup%201.0.0.exe"
+            href="https://github.com/AMOLOP007/GAMEVAULT/releases/latest/download/GameVault-Setup-1.0.0.exe"
             className="flex items-center gap-2 bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:shadow-[0_0_25px_rgba(139,92,246,0.3)] transition-all hover:-translate-y-0.5"
           >
             <Download className="w-4 h-4" /> Download
@@ -62,7 +62,7 @@ export default function LandingPage() {
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
                 <a
-                  href="https://github.com/AMOLOP007/GAMEVAULT/releases/latest/download/GameVault%20Setup%201.0.0.exe"
+                  href="https://github.com/AMOLOP007/GAMEVAULT/releases/latest/download/GameVault-Setup-1.0.0.exe"
                   className="flex items-center gap-3 bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-[0_0_40px_rgba(139,92,246,0.35)] transition-all hover:-translate-y-1 w-full sm:w-auto justify-center"
                 >
                   <Download className="w-5 h-5" /> Download for Windows
