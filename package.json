@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "GameVault – Universal Game Tracker & Library Manager",
+  "main": "apps/desktop/dist/main/index.js",
   "workspaces": [
     "apps/*",
     "packages/*"

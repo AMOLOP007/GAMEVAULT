@@ -15,7 +15,7 @@ module.exports = {
   copyright: 'Copyright © 2026 GameVault',
 
   directories: {
-    output: 'D:/GAMEVAULT-dist',
+    output: 'release',
     buildResources: 'apps/desktop/assets',
   },
 
@@ -60,10 +60,6 @@ module.exports = {
       }
     ],
     icon: 'apps/desktop/assets/icon.ico',
-    // Sign the executable (requires certificate)
-    certificateFile: 'gamevault-cert.pfx',
-    certificatePassword: 'gamevault',
-    signingHashAlgorithms: ['sha256'],
   },
 
   nsis: {

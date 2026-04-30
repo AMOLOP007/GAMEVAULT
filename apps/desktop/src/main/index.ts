@@ -22,8 +22,8 @@ const __dirname = path.dirname(__filename);
 
 // ── Configuration ────────────────────────────────
 // In production, these should point to the centralized cloud service
-const API_BASE_URL = process.env.API_URL || (app.isPackaged ? 'https://api.gamevault.com' : 'http://localhost:3001');
-const WEB_BASE_URL = process.env.WEB_URL || (app.isPackaged ? 'https://app.gamevault.com' : 'http://localhost:3000');
+const API_BASE_URL = process.env.API_URL || (app.isPackaged ? 'https://gamevault-j05d.onrender.com' : 'http://localhost:3001');
+const WEB_BASE_URL = process.env.WEB_URL || (app.isPackaged ? 'https://gamevault-web.vercel.app' : 'http://localhost:3000');
 
 // ── Components ───────────────────────────────
 const detector = new PsListDetector();
