@@ -114,10 +114,29 @@ export default async function socialRoutes(fastify: FastifyInstance) {
     const { userId, friendId } = request.body;
     if (userId === friendId) return reply.status(400).send({ error: 'Cannot friend yourself' });
 
-    return await prisma.friend.upsert({
-      where: { userId_friendId: { userId, friendId } },
-      update: { status: 'PENDING' },
-      create: { userId, friendId, status: 'PENDING' }
+    // Check if relationship already exists in EITHER direction
+    const existing = await prisma.friend.findFirst({
+      where: {
+        OR: [
+          { userId, friendId },
+          { userId: friendId, friendId: userId }
+        ]
+      }
+    });
+
+    if (existing) {
+      if (existing.status === 'ACCEPTED') return { message: 'Already friends' };
+      if (existing.userId === userId) return { message: 'Request already sent' };
+      
+      // If the OTHER person already sent a request, auto-accept it!
+      return await prisma.friend.update({
+        where: { id: existing.id },
+        data: { status: 'ACCEPTED' }
+      });
+    }
+
+    return await prisma.friend.create({
+      data: { userId, friendId, status: 'PENDING' }
     });
   });
 
