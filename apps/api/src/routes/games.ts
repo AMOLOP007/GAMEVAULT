@@ -283,8 +283,8 @@ export default async function gameRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/sync-metadata', async (request: any, reply) => {
     const { id } = request.params;
     
-    // Find the game first to ensure it exists
-    const game = await prisma.game.findFirst({
+    // First, try to find by Game ID or RAWG ID
+    let game = await prisma.game.findFirst({
       where: {
         OR: [
           { id },
@@ -293,11 +293,27 @@ export default async function gameRoutes(fastify: FastifyInstance) {
       }
     });
 
+    // If not found, it might be a UserGame ID from the frontend
+    if (!game) {
+      const userGame = await prisma.userGame.findUnique({
+        where: { id },
+        include: { game: true }
+      });
+      if (userGame) {
+        game = userGame.game;
+      }
+    }
+
     if (!game) {
       return reply.code(404).send({ error: 'Game not found for synchronization' });
     }
 
-    await hydrateGameMetadata(game.id);
-    return { success: true, gameId: game.id };
+    try {
+      await hydrateGameMetadata(game.id);
+      return { success: true, gameId: game.id };
+    } catch (err: any) {
+      request.log.error(`Metadata sync failed for ${game.id}: ${err.message}`);
+      return reply.code(500).send({ error: 'Failed to sync metadata. RAWG API might be unavailable or limits reached.' });
+    }
   });
 }
