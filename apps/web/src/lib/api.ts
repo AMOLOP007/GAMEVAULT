@@ -144,6 +144,10 @@ class ApiClient {
     return this.request<any[]>('/api/stats/distribution');
   }
 
+  async getGenreStats() {
+    return this.request<any[]>('/api/stats/genres');
+  }
+
   // Playtime
   async getPlaySessions(gameId: string) {
     return this.request<any[]>(`/api/playtime/${gameId}`);

@@ -122,6 +122,26 @@ export default async function statsRoutes(fastify: FastifyInstance) {
     })).reverse();
   });
 
+  // GET /api/stats/genres
+  fastify.get('/genres', async (request: any, reply) => {
+    const userId = request.user.sub;
+    const userGames = await prisma.userGame.findMany({
+      where: { userId },
+      include: { game: true }
+    });
+
+    const genreMap: Record<string, number> = {};
+    userGames.forEach(ug => {
+      const genre = ug.game.genre || 'Unknown';
+      genreMap[genre] = (genreMap[genre] || 0) + 1;
+    });
+
+    return Object.entries(genreMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8); // Top 8 genres
+  });
+
   // GET /api/stats/game/:gameId
   fastify.get('/game/:gameId', async (request: any, reply) => {
     const userId = request.user.sub;

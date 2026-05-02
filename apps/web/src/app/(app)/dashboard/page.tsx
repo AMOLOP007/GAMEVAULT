@@ -27,10 +27,13 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import BugReportSection from '@/components/dashboard/BugReportSection';
+import VisualAnalytics from '@/components/dashboard/VisualAnalytics';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [weekly, setWeekly] = useState<any>(null);
+  const [distribution, setDistribution] = useState<any[]>([]);
+  const [genres, setGenres] = useState<any[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,11 +41,15 @@ export default function DashboardPage() {
     Promise.all([
       api.getStats(), 
       api.getWeeklyStats(),
+      api.getDistribution(),
+      api.getGenreStats(),
       api.get('/api/social/activity').catch(() => [])
     ])
-      .then(([s, w, a]) => { 
+      .then(([s, w, d, g, a]) => { 
         setStats(s); 
         setWeekly(w); 
+        setDistribution(d);
+        setGenres(g);
         setActivity(Array.isArray(a) ? a : []);
       })
       .catch(console.error)
@@ -50,11 +57,8 @@ export default function DashboardPage() {
   }, []);
 
   const chartData = useMemo(() => {
-    if (!weekly?.days) return [];
-    return weekly.days.map((d: any) => ({
-      day: new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' }),
-      hours: +(d.totalSeconds / 3600).toFixed(1),
-    }));
+    if (!weekly) return [];
+    return weekly;
   }, [weekly]);
 
   return (
@@ -160,75 +164,15 @@ export default function DashboardPage() {
       {/* ── Main Content Grid ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         
-        {/* Playtime Analysis */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="xl:col-span-2 glass-panel p-8 group"
-        >
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-2xl bg-[#8b5cf6]/10 text-[#c084fc] group-hover:scale-110 transition-transform">
-                <ActivityIcon className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-white tracking-tight">Active Analytics</h2>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Weekly Playtime Trend</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-               {[1,2,3].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]/20" />)}
-            </div>
-          </div>
-
-          <div className="h-[320px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} barCategoryGap="20%">
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(139,92,246,0.06)" />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fill: '#475569', fontSize: 11, fontWeight: 800 }}
-                  axisLine={false}
-                  tickLine={false}
-                  dy={15}
-                />
-                <YAxis
-                  tick={{ fill: '#475569', fontSize: 11, fontWeight: 800 }}
-                  axisLine={false}
-                  tickLine={false}
-                  unit="h"
-                  dx={-10}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(139,92,246,0.05)', radius: 12 }}
-                  contentStyle={{
-                    background: '#0c0c1d',
-                    border: '1px solid rgba(139,92,246,0.2)',
-                    borderRadius: '16px',
-                    boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
-                    padding: '16px',
-                  }}
-                  itemStyle={{ color: '#f8fafc', fontWeight: 900, fontSize: '14px' }}
-                  labelStyle={{ color: '#8b5cf6', marginBottom: '8px', textTransform: 'uppercase', fontSize: '10px', fontWeight: 900, letterSpacing: '0.2em' }}
-                  formatter={(value: any) => [`${value} hours`, 'Gaming Time']}
-                />
-                <defs>
-                  <linearGradient id="dashboardBarGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#c084fc" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.6} />
-                  </linearGradient>
-                </defs>
-                <Bar
-                  dataKey="hours"
-                  fill="url(#dashboardBarGrad)"
-                  radius={[12, 12, 0, 0]}
-                  animationDuration={2000}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+      {/* ── Visual Analytics ── */}
+      <div className="xl:col-span-2">
+        <VisualAnalytics 
+          playtimeDistribution={distribution}
+          genreDistribution={genres}
+          weeklyPlaytime={chartData}
+          loading={loading}
+        />
+      </div>
 
         {/* Global Social Feed */}
         <motion.div
