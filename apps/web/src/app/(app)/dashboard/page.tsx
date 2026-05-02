@@ -32,8 +32,6 @@ import VisualAnalytics from '@/components/dashboard/VisualAnalytics';
 export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [weekly, setWeekly] = useState<any>(null);
-  const [distribution, setDistribution] = useState<any[]>([]);
-  const [genres, setGenres] = useState<any[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,15 +39,11 @@ export default function DashboardPage() {
     Promise.all([
       api.getStats(), 
       api.getWeeklyStats(),
-      api.getDistribution(),
-      api.getGenreStats(),
       api.get('/api/social/activity').catch(() => [])
     ])
-      .then(([s, w, d, g, a]) => { 
+      .then(([s, w, a]) => { 
         setStats(s); 
         setWeekly(w); 
-        setDistribution(d);
-        setGenres(g);
         setActivity(Array.isArray(a) ? a : []);
       })
       .catch(console.error)
@@ -164,14 +158,57 @@ export default function DashboardPage() {
       {/* ── Main Content Grid ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         
-      {/* ── Visual Analytics ── */}
-      <div className="xl:col-span-2">
-        <VisualAnalytics 
-          playtimeDistribution={distribution}
-          genreDistribution={genres}
-          weeklyPlaytime={chartData}
-          loading={loading}
-        />
+      {/* ── Dashboard Pulse ── */}
+      <div className="xl:col-span-2 space-y-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-panel p-8 relative overflow-hidden group"
+        >
+          <div className="flex items-center justify-between mb-8 relative z-10">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-[#8b5cf6]/10 text-[#c084fc] group-hover:scale-110 transition-transform">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-white italic tracking-tight">Active Pulse</h2>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Real-time engagement trend</p>
+              </div>
+            </div>
+            <Link href="/analytics">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-4 py-2 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black text-slate-400 hover:text-white transition-all uppercase tracking-widest flex items-center gap-2"
+              >
+                Deep Intelligence <ChevronRight className="w-3 h-3" />
+              </motion.button>
+            </Link>
+          </div>
+
+          <div className="h-[260px] w-full relative z-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="dashPulse" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="day" hide />
+                <YAxis hide />
+                <Tooltip 
+                  contentStyle={{ background: '#0c0c1d', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px' }}
+                  itemStyle={{ color: '#fff', fontSize: '11px', fontWeight: 900 }}
+                  labelStyle={{ display: 'none' }}
+                />
+                <Area type="monotone" dataKey="minutes" stroke="#8b5cf6" strokeWidth={3} fill="url(#dashPulse)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-[#8b5cf6]/5 rounded-full blur-[100px] pointer-events-none" />
+        </motion.div>
       </div>
 
         {/* Global Social Feed */}

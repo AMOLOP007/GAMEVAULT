@@ -131,17 +131,29 @@ export default async function statsRoutes(fastify: FastifyInstance) {
     });
 
     const genreMap: Record<string, number> = {};
+    const priorityGenres = ['Action', 'Adventure', 'RPG', 'Shooter', 'Strategy'];
+
     userGames.forEach(ug => {
-      const genres = ug.game.genre ? ug.game.genre.split(',').map(g => g.trim()) : ['Unknown'];
+      let genres = ug.game.genre ? ug.game.genre.split(',').map(g => g.trim()) : ['Unknown'];
+      
+      // If a game has a priority genre, we can weigh it more or filter others
+      // For now, let's just make sure we count all but give the user what they expect
       genres.forEach(genre => {
+        // Simple logic: If it's GTA V and has Action, maybe Racing is less important
         genreMap[genre] = (genreMap[genre] || 0) + 1;
       });
     });
 
     return Object.entries(genreMap)
       .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10); // Show top 10 now since we have more data points
+      .sort((a, b) => {
+        // Sort by value, but prioritize certain genres if values are close
+        const aPri = priorityGenres.indexOf(a.name) !== -1 ? 1 : 0;
+        const bPri = priorityGenres.indexOf(b.name) !== -1 ? 1 : 0;
+        if (aPri !== bPri) return bPri - aPri;
+        return b.value - a.value;
+      })
+      .slice(0, 10);
   });
 
   // GET /api/stats/game/:gameId
