@@ -55,6 +55,7 @@ export class BadgeService {
       await (prisma as any).badge.upsert({
         where: { id: badge.id },
         update: {
+          code: badge.id,
           name: badge.name,
           description: badge.description,
           icon: badge.icon,
@@ -64,6 +65,7 @@ export class BadgeService {
         },
         create: {
           id: badge.id,
+          code: badge.id,
           name: badge.name,
           description: badge.description,
           icon: badge.icon,
