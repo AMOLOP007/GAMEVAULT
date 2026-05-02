@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const files = [
   { src: 'src/main/preload.cjs', dest: 'dist/main/preload.cjs' },
@@ -14,9 +14,3 @@ files.forEach(f => {
   fs.copyFileSync(f.src, f.dest);
   console.log(`Copied ${f.src} to ${f.dest}`);
 });
-
-// Remove any lingering package.json from previous ESM attempts
-const mainPkgPath = path.join('dist/main', 'package.json');
-if (fs.existsSync(mainPkgPath)) {
-  fs.unlinkSync(mainPkgPath);
-}

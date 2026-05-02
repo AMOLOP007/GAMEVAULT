@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, dialog } from 'electron';
+import { fileURLToPath } from 'url';
 import path from 'path';
 import store from './store.js';
 import axios from 'axios';
@@ -16,7 +17,8 @@ import { runFullLibraryDiscovery } from './services/libraryScanner.js';
 import { GameLauncher } from './launcher/GameLauncher.js';
 import { resolveLaunchConfig } from './launcher/LaunchResolver.js';
 
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ── Configuration ────────────────────────────────
 const isDev = !app.isPackaged;
