@@ -239,6 +239,12 @@ export default function VisualAnalytics({
             </AreaChart>
           </ResponsiveContainer>
         </div>
+
+        <div className="mt-4 flex items-center justify-center">
+           <p className="text-[7px] font-bold text-slate-700 uppercase tracking-[0.2em] opacity-40 hover:opacity-100 transition-opacity cursor-help">
+             AI Engine Active: Historical gaps reconstructed via pattern analysis (Steam 2-week sync data)
+           </p>
+        </div>
       </motion.div>
     </div>
   );

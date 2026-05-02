@@ -40,17 +40,32 @@ export async function syncSteamAchievements(userId: string, steamId: string, api
             }
           });
 
+          // Calculate missing playtime for prediction
+          const currentLocal = await prisma.userGame.findUnique({
+            where: { userId_gameId: { userId, gameId: game.id } },
+            select: { totalPlaytime: true }
+          });
+
+          const steamTotalSeconds = steamGame.playtime_forever * 60;
+          const localTotalSeconds = currentLocal?.totalPlaytime || 0;
+          const missedSeconds = steamTotalSeconds - localTotalSeconds;
+
+          if (missedSeconds > 300) { // More than 5 minutes difference
+            const { PredictionEngine } = await import('./predictionEngine.js');
+            await PredictionEngine.predictAndDistribute(userId, game.id, missedSeconds);
+          }
+
           // Upsert UserGame
           await prisma.userGame.upsert({
             where: { userId_gameId: { userId, gameId: game.id } },
             update: {
-              totalPlaytime: steamGame.playtime_forever * 60, // Steam stores minutes
+              totalPlaytime: steamTotalSeconds,
               lastPlayed: steamGame.playtime_last_played ? new Date(steamGame.playtime_last_played * 1000) : undefined
             },
             create: {
               userId,
               gameId: game.id,
-              totalPlaytime: steamGame.playtime_forever * 60,
+              totalPlaytime: steamTotalSeconds,
               lastPlayed: steamGame.playtime_last_played ? new Date(steamGame.playtime_last_played * 1000) : undefined,
               status: steamGame.playtime_forever > 0 ? 'playing' : 'backlog'
             }
