@@ -95,4 +95,42 @@ export default async function syncRoutes(fastify: FastifyInstance) {
       message: `Synced ${successCount} out of ${userGames.length} Steam games.` 
     };
   });
+
+  // POST /api/sync/forensic - High-accuracy forensic reconstruction
+  fastify.post('/forensic', async (request: FastifyRequest) => {
+    const userId = (request.user as any).sub;
+    const { appId, lastPlayed, totalPlaytimeMinutes, powerEvents, steamLogs, gameId } = request.body as any;
+
+    if (!appId || !gameId) {
+      throw new Error('AppID and GameID are required for forensic sync');
+    }
+
+    // Calculate missed playtime
+    const userGame = await prisma.userGame.findUnique({
+      where: { userId_gameId: { userId, gameId } },
+      select: { totalPlaytime: true }
+    });
+
+    const currentTotalSeconds = userGame?.totalPlaytime || 0;
+    const steamTotalSeconds = totalPlaytimeMinutes * 60;
+    const missedSeconds = steamTotalSeconds - currentTotalSeconds;
+
+    if (missedSeconds > 60) {
+      const { PredictionEngine } = await import('../services/predictionEngine.js');
+      await PredictionEngine.reconstruct(userId, gameId, {
+        lastPlayed,
+        totalPlaytimeMinutes,
+        powerEvents,
+        steamLogs
+      }, missedSeconds);
+
+      // Update the total playtime in UserGame
+      await prisma.userGame.update({
+        where: { userId_gameId: { userId, gameId } },
+        data: { totalPlaytime: steamTotalSeconds }
+      });
+    }
+
+    return { success: true, missedSeconds };
+  });
 }
