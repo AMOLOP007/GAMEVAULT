@@ -132,14 +132,16 @@ export default async function statsRoutes(fastify: FastifyInstance) {
 
     const genreMap: Record<string, number> = {};
     userGames.forEach(ug => {
-      const genre = ug.game.genre || 'Unknown';
-      genreMap[genre] = (genreMap[genre] || 0) + 1;
+      const genres = ug.game.genre ? ug.game.genre.split(',').map(g => g.trim()) : ['Unknown'];
+      genres.forEach(genre => {
+        genreMap[genre] = (genreMap[genre] || 0) + 1;
+      });
     });
 
     return Object.entries(genreMap)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 8); // Top 8 genres
+      .slice(0, 10); // Show top 10 now since we have more data points
   });
 
   // GET /api/stats/game/:gameId

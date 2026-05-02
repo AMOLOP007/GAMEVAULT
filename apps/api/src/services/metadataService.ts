@@ -73,7 +73,7 @@ export async function hydrateGameMetadata(gameId: string) {
           where: { id: gameId },
           data: {
             coverUrl: result.background_image,
-            genre: result.genres?.[0]?.name || 'Unknown',
+            genre: result.genres?.map((g: any) => g.name).join(', ') || 'Unknown',
             description: result.description_raw || game.description || '',
             rating: result.rating || 0,
             rawgId: result.id.toString()
