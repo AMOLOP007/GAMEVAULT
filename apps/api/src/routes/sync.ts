@@ -133,4 +133,56 @@ export default async function syncRoutes(fastify: FastifyInstance) {
 
     return { success: true, missedSeconds };
   });
+
+  // POST /api/sync/sessions - Sync local play sessions
+  fastify.post('/sessions', async (request: FastifyRequest) => {
+    const userId = (request.user as any).sub;
+    const session = request.body as any;
+
+    return await prisma.playSession.upsert({
+      where: { id: session.id },
+      create: {
+        ...session,
+        userId,
+        startTime: new Date(session.startTime),
+        endTime: session.endTime ? new Date(session.endTime) : null,
+        lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
+        synced: true
+      },
+      update: {
+        ...session,
+        userId,
+        startTime: new Date(session.startTime),
+        endTime: session.endTime ? new Date(session.endTime) : null,
+        lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
+        synced: true
+      }
+    });
+  });
+
+  // POST /api/sync/achievements - Sync local achievements
+  fastify.post('/achievements', async (request: FastifyRequest) => {
+    const userId = (request.user as any).sub;
+    const achievement = request.body as any;
+
+    return await prisma.gameAchievement.upsert({
+      where: {
+        userId_gameId_key: {
+          userId,
+          gameId: achievement.gameId,
+          key: achievement.key
+        }
+      },
+      create: {
+        ...achievement,
+        userId,
+        earnedAt: achievement.earnedAt ? new Date(achievement.earnedAt) : null
+      },
+      update: {
+        ...achievement,
+        userId,
+        earnedAt: achievement.earnedAt ? new Date(achievement.earnedAt) : null
+      }
+    });
+  });
 }

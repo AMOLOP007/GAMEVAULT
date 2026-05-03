@@ -20,10 +20,8 @@ import { resolveLaunchConfig } from './launcher/LaunchResolver.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ── Configuration ────────────────────────────────
+import { API_BASE_URL, WEB_BASE_URL } from './config.js';
 const isDev = !app.isPackaged;
-const API_BASE_URL = isDev ? 'http://localhost:3001' : (process.env.API_URL || 'https://gamevault-j05d.onrender.com');
-const WEB_BASE_URL = isDev ? 'http://localhost:3000' : (process.env.WEB_URL || 'https://gamevault-web-lejg.vercel.app');
 
 // ── Components ───────────────────────────────
 const detector = new PsListDetector();
@@ -132,6 +130,12 @@ async function autoScanAndSync(userId: string) {
         update: {},
         create: { userId, gameId: g.id, status: 'playing' }
       });
+
+      // ── TRIGGER FORENSIC SYNC ──
+      if (game.steamAppId) {
+        const { forensicSyncService } = await import('./services/forensicSyncService.js');
+        forensicSyncService.syncGame(game.steamAppId.toString(), g.id).catch(() => {});
+      }
 
       // SYNC TO CENTRAL API
       const token = store.get('token');
@@ -609,6 +613,8 @@ ipcMain.handle('library:confirmAll', async (_, { games }) => {
           epicAppId: game.epicAppId,
           gogAppId: game.gogAppId,
           coverUrl: game.coverUrl, // If available
+          totalPlaytime: game.playtime,
+          playtime2Weeks: game.playtime2Weeks,
         }, {
           headers: { Authorization: `Bearer ${currentToken}` }
         }).catch(err => log.error(`[Main] API Sync failed for ${game.name}: ${err.message}`));

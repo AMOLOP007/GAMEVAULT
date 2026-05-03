@@ -47,19 +47,32 @@ export class SteamScraperService {
       }
 
       // ── 2. Improved XML Parsing ───────────────────────────────────────────
+      const hoursOnRecordMatch = text.match(/<hoursOnRecord>(.*?)<\/hoursOnRecord>/i);
       const hoursPlayedMatch = text.match(/<hoursPlayed>(.*?)<\/hoursPlayed>/i);
-      const totalPlaytimeSeconds = hoursPlayedMatch ? Math.round(parseFloat(hoursPlayedMatch[1].replace(',', '')) * 3600) : 0;
+      
+      // Prefer hoursOnRecord (total) over hoursPlayed (sometimes recent)
+      const playtimeVal = hoursOnRecordMatch?.[1] || hoursPlayedMatch?.[1];
+      const totalPlaytimeSeconds = playtimeVal ? Math.round(parseFloat(playtimeVal.replace(',', '')) * 3600) : 0;
 
-      // Update total playtime in library if we found any
+      // Update total playtime in library if we found a GREATER value
       if (totalPlaytimeSeconds > 0) {
         try {
-          await (prisma as any).userGame.update({
+          const currentUg = await (prisma as any).userGame.findUnique({
             where: { userId_gameId: { userId, gameId } },
-            data: { totalPlaytime: totalPlaytimeSeconds }
+            select: { totalPlaytime: true }
           });
-          console.log(`[Scraper] Updated playtime for game ${gameId}: ${totalPlaytimeSeconds}s`);
+
+          if (!currentUg || totalPlaytimeSeconds > currentUg.totalPlaytime) {
+            await (prisma as any).userGame.update({
+              where: { userId_gameId: { userId, gameId } },
+              data: { totalPlaytime: totalPlaytimeSeconds }
+            });
+            console.log(`[Scraper] Updated playtime for game ${gameId}: ${totalPlaytimeSeconds}s (was ${currentUg?.totalPlaytime || 0}s)`);
+          } else {
+            console.log(`[Scraper] Stored playtime (${currentUg.totalPlaytime}s) is already higher or equal to scraped (${totalPlaytimeSeconds}s). Skipping update.`);
+          }
         } catch (e) {
-          // Game might not be in library yet, that's okay
+          // Game might not be in library yet
         }
       }
 
@@ -150,6 +163,7 @@ export class SteamScraperService {
       return { 
         success: true, 
         count: successCount, 
+        totalPlaytimeSeconds,
         message: `Successfully synced ${successCount} achievements.` 
       };
     } catch (err: any) {

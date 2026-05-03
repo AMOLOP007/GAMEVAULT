@@ -117,12 +117,12 @@ export default function GameDetailsPage() {
               <InfoBlock label="Playtime" value={formatPlaytime(data.totalPlaytime)} />
               <InfoBlock label="Sessions" value={String(data._count?.playSessions || 0)} />
               <InfoBlock label="Developer" value={game.developer || '—'} />
-              <InfoBlock label="Platform" value={game.platform?.join(', ') || '—'} />
+              <InfoBlock label="Platform" value={typeof game.platform === 'string' ? game.platform : (Array.isArray(game.platform) ? game.platform.join(', ') : '—')} />
             </div>
 
-            {game.genre?.length > 0 && (
+            {game.genre && (
               <div className="flex gap-1.5 mt-4 flex-wrap">
-                {game.genre.map((g: string) => (
+                {(typeof game.genre === 'string' ? game.genre.split(',').map((s: string) => s.trim()) : (Array.isArray(game.genre) ? game.genre : [])).map((g: string) => (
                   <span key={g} className="text-[10px] px-2.5 py-1 rounded-md bg-[#8b5cf6]/8 text-[#8b5cf6]/60 border border-[#8b5cf6]/10 font-bold uppercase tracking-wider">
                     {g}
                   </span>

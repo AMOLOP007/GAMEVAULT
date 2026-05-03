@@ -20,6 +20,7 @@ export interface DiscoveredGame {
   installPath: string;
   platform: string;
   playtime?: number;
+  playtime2Weeks?: number;
 }
 
 // ── SOURCE 1: Steam Library via .vdf manifest files ──────────────────────────
@@ -63,7 +64,7 @@ export async function discoverSteamGames(): Promise<DiscoveredGame[]> {
     libraryPaths.push(steamPath);
 
     // 3. Get Playtime from localconfig.vdf
-    const steamUserPlaytime: Record<number, number> = {};
+    const steamUserPlaytime: Record<number, { total: number; twoWeeks: number }> = {};
     try {
       const userdataPath = path.join(steamPath, 'userdata');
       if (fs.existsSync(userdataPath)) {
@@ -74,7 +75,6 @@ export async function discoverSteamGames(): Promise<DiscoveredGame[]> {
           if (fs.existsSync(localConfigPath)) {
             const content = fs.readFileSync(localConfigPath, 'utf8');
             const config: any = vdf.parse(content);
-            // Steam VDF can be tricky with case sensitivity
             const store = config?.UserLocalConfigStore || config?.userlocalconfigstore;
             const apps = store?.Software?.Valve?.Steam?.Apps || store?.software?.valve?.steam?.apps || store?.Software?.Valve?.Steam?.apps;
             
@@ -84,8 +84,13 @@ export async function discoverSteamGames(): Promise<DiscoveredGame[]> {
               for (const appId of appIds) {
                 const appData = apps[appId];
                 const playtime = appData?.Playtime || appData?.playtime || appData?.TotalPlaytime || appData?.totalplaytime;
+                const playtime2weeks = appData?.Playtime2Weeks || appData?.playtime2weeks;
+                
                 if (playtime) {
-                  steamUserPlaytime[parseInt(appId)] = parseInt(playtime) * 60; // Minutes to seconds
+                  steamUserPlaytime[parseInt(appId)] = {
+                    total: parseInt(playtime) * 60,
+                    twoWeeks: playtime2weeks ? parseInt(playtime2weeks) * 60 : 0
+                  };
                 }
               }
             }
@@ -126,7 +131,8 @@ export async function discoverSteamGames(): Promise<DiscoveredGame[]> {
             steamAppId: appId,
             installPath: fullInstallPath,
             platform: 'Steam',
-            playtime: steamUserPlaytime[appId] || 0, // Add recovered playtime
+            playtime: steamUserPlaytime[appId]?.total || 0,
+            playtime2Weeks: steamUserPlaytime[appId]?.twoWeeks || 0,
           });
         } catch { continue; }
       }

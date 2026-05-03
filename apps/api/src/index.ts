@@ -4,13 +4,15 @@ import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
-import prisma from './lib/prisma.js';
-
 import { fileURLToPath } from 'url';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Initialize environment variables BEFORE anything else (like Prisma)
 dotenv.config({ path: path.resolve(__dirname, '../../../.env.local') });
+
+import prisma from './lib/prisma.js';
 
 const app = Fastify({ 
   logger: true,

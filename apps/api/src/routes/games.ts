@@ -18,7 +18,7 @@ export default async function gameRoutes(fastify: FastifyInstance) {
 
     if (search) {
       where.game = {
-        title: { contains: search, mode: 'insensitive' }
+        title: { contains: search }
       };
     }
 
@@ -62,7 +62,8 @@ export default async function gameRoutes(fastify: FastifyInstance) {
   fastify.post('/', async (request: any, reply) => {
     const { 
       title, exePath, processName, coverUrl, 
-      steamAppId, epicAppId, gogAppId, source, launchUri 
+      steamAppId, epicAppId, gogAppId, source, launchUri,
+      totalPlaytime, playtime2Weeks
     } = request.body;
     const userId = request.user.sub;
 
@@ -70,7 +71,7 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     let game = await prisma.game.findFirst({
       where: {
         OR: [
-          ...(steamAppId ? [{ steamAppId }] : []),
+          ...(steamAppId ? [{ steamAppId: Number(steamAppId) }] : []),
           ...(epicAppId ? [{ epicAppId }] : []),
           { title }
         ]
@@ -82,7 +83,8 @@ export default async function gameRoutes(fastify: FastifyInstance) {
         game = await prisma.game.create({
           data: { 
             title, exePath, processName, coverUrl,
-            steamAppId, epicAppId, gogAppId, source, launchUri
+            steamAppId: steamAppId ? Number(steamAppId) : null, 
+            epicAppId, gogAppId, source, launchUri
           }
         });
         hydrateGameMetadata(game.id).catch(console.error);
@@ -99,17 +101,40 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     if (!game) throw new Error('Failed to resolve or create game');
 
     // Add to user library using upsert to handle concurrency
+    const { getActiveActivity } = await import('../services/playtimeService.js');
+    const active = await getActiveActivity(userId);
+    const initialStatus = (active?.gameId === game.id) ? 'playing' : (request.body.status || 'backlog');
+
     const userGame = await prisma.userGame.upsert({
       where: { userId_gameId: { userId, gameId: game.id } },
       update: {
-        // Optionally update some fields if needed
+        totalPlaytime: totalPlaytime ? Number(totalPlaytime) : undefined,
+        playtime2Weeks: playtime2Weeks ? Number(playtime2Weeks) : undefined,
+        // If it's already there, only update status to playing if it was backlog and they are currently playing it
+        ...(active?.gameId === game.id ? { status: 'playing' } : {})
       },
       create: { 
         userId, 
         gameId: game.id,
-        status: request.body.status || 'backlog'
+        status: initialStatus,
+        totalPlaytime: totalPlaytime ? Number(totalPlaytime) : 0,
+        playtime2Weeks: playtime2Weeks ? Number(playtime2Weeks) : 0
       }
     });
+
+    // ── TRIGGER PREDICTION ENGINE ──
+    if (totalPlaytime && Number(totalPlaytime) > 0) {
+      const { PredictionEngine } = await import('../services/predictionEngine.js');
+      // Use now as lastPlayed if not provided
+      const lastPlayed = new Date(); 
+      PredictionEngine.predictAndDistribute(
+        userId, 
+        game.id, 
+        Number(totalPlaytime), 
+        Math.floor(lastPlayed.getTime() / 1000), 
+        Number(playtime2Weeks || 0)
+      ).catch(err => console.error('[Prediction] Failed:', err));
+    }
 
     return userGame;
   });
@@ -310,6 +335,17 @@ export default async function gameRoutes(fastify: FastifyInstance) {
 
     try {
       await hydrateGameMetadata(game.id);
+      
+      // If it's a UserGame context, also sync lifetime playtime
+      const userGame = await prisma.userGame.findFirst({
+        where: { userId: request.user.sub, gameId: game.id }
+      });
+      
+      if (userGame) {
+        const { syncTotalPlaytime } = await import('../services/playtimeService.js');
+        await syncTotalPlaytime(request.user.sub, userGame.id);
+      }
+
       return { success: true, gameId: game.id };
     } catch (err: any) {
       request.log.error(`Metadata sync failed for ${game.id}: ${err.message}`);

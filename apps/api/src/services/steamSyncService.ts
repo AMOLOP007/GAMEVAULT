@@ -41,18 +41,26 @@ export async function syncSteamAchievements(userId: string, steamId: string, api
           });
 
           // Calculate missing playtime for prediction
-          const currentLocal = await prisma.userGame.findUnique({
-            where: { userId_gameId: { userId, gameId: game.id } },
-            select: { totalPlaytime: true }
+          const currentUg = await prisma.userGame.findUnique({
+            where: { userId_gameId: { userId, gameId: game.id } }
           });
 
           const steamTotalSeconds = steamGame.playtime_forever * 60;
-          const localTotalSeconds = currentLocal?.totalPlaytime || 0;
+          const steam2WeeksSeconds = (steamGame.playtime_2weeks || 0) * 60;
+          const localTotalSeconds = currentUg?.totalPlaytime || 0;
           const missedSeconds = steamTotalSeconds - localTotalSeconds;
 
           if (missedSeconds > 300) { // More than 5 minutes difference
             const { PredictionEngine } = await import('./predictionEngine.js');
-            await PredictionEngine.predictAndDistribute(userId, game.id, missedSeconds);
+            await PredictionEngine.predictAndDistribute(userId, game.id, missedSeconds, steamGame.playtime_last_played, steam2WeeksSeconds);
+          }
+
+          // Determine robust initial status
+          let status = 'backlog';
+          if (steamGame.playtime_2weeks > 0) {
+            status = 'playing';
+          } else if (steamGame.playtime_forever > 0) {
+            status = 'played';
           }
 
           // Upsert UserGame
@@ -60,14 +68,18 @@ export async function syncSteamAchievements(userId: string, steamId: string, api
             where: { userId_gameId: { userId, gameId: game.id } },
             update: {
               totalPlaytime: steamTotalSeconds,
-              lastPlayed: steamGame.playtime_last_played ? new Date(steamGame.playtime_last_played * 1000) : undefined
+              playtime2Weeks: steam2WeeksSeconds,
+              lastPlayed: steamGame.playtime_last_played ? new Date(steamGame.playtime_last_played * 1000) : undefined,
+              // Only auto-update status if it's currently 'backlog' or 'played' and we have recent activity
+              ...(currentUg?.status === 'backlog' || !currentUg ? { status } : (currentUg?.status === 'played' && status === 'playing' ? { status } : {}))
             },
             create: {
               userId,
               gameId: game.id,
               totalPlaytime: steamTotalSeconds,
+              playtime2Weeks: steam2WeeksSeconds,
               lastPlayed: steamGame.playtime_last_played ? new Date(steamGame.playtime_last_played * 1000) : undefined,
-              status: steamGame.playtime_forever > 0 ? 'playing' : 'backlog'
+              status: status
             }
           });
           gamesAdded++;

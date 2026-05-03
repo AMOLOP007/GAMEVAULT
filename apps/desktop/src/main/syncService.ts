@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Store from './store.js';
 import prisma from './db.js';
+import { API_BASE_URL } from './config.js';
 const store = Store;
 
 export class SyncService {
@@ -29,7 +30,7 @@ export class SyncService {
       });
 
       for (const session of unsyncedSessions) {
-        await axios.post(`${process.env.API_URL}/api/sync/sessions`, session, {
+        await axios.post(`${API_BASE_URL}/api/sync/sessions`, session, {
           headers: { Authorization: `Bearer ${token}` }
         });
         await (prisma as any).playSession.update({
@@ -44,7 +45,7 @@ export class SyncService {
       });
 
       for (const ach of unsyncedAchievements) {
-        await axios.post(`${process.env.API_URL}/api/sync/achievements`, ach, {
+        await axios.post(`${API_BASE_URL}/api/sync/achievements`, ach, {
           headers: { Authorization: `Bearer ${token}` }
         });
         await (prisma as any).userAchievement.update({

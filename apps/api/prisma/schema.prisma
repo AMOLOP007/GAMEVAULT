@@ -89,6 +89,7 @@ model UserGame {
   gameId        String
   status        String   @default("playing")
   totalPlaytime Int      @default(0)
+  playtime2Weeks Int     @default(0)
   lastPlayed    DateTime?
   lastPlayedAt  DateTime?
   rating        Int?

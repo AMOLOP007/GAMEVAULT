@@ -3,11 +3,13 @@ import log from 'electron-log';
 import store from '../store.js';
 import { ForensicService } from './forensicService.js';
 
+import { API_BASE_URL } from '../config.js';
+
 export class ForensicSyncService {
   private apiUrl: string;
 
   constructor() {
-    this.apiUrl = `http://localhost:${process.env.API_PORT || 3001}/api/sync/forensic`;
+    this.apiUrl = `${API_BASE_URL}/api/sync/forensic`;
   }
 
   /**

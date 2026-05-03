@@ -3,6 +3,24 @@ import prisma from '../lib/prisma.js';
 
 export default async function socialRoutes(fastify: FastifyInstance) {
   /**
+   * Helper to resolve Supabase UUID to internal CUID
+   */
+  async function resolveId(id: string): Promise<string> {
+    if (!id) return '';
+    // If it's already a CUID (NanoID/CUID usually start with 'c' or are non-UUID format), but we'll check DB anyway
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: id },
+          { supabaseId: id }
+        ]
+      },
+      select: { id: true }
+    });
+    return user?.id || id;
+  }
+
+  /**
    * GET /api/social/activity
    * Returns a global feed of recent activities
    */
@@ -23,7 +41,7 @@ export default async function socialRoutes(fastify: FastifyInstance) {
    * Returns activity feed for a user and their friends
    */
   fastify.get('/activity/friends/:userId', async (request: any) => {
-    const { userId } = request.params;
+    const userId = await resolveId(request.params.userId);
     const friends = await prisma.friend.findMany({
       where: {
         OR: [{ userId }, { friendId: userId }],
@@ -49,9 +67,9 @@ export default async function socialRoutes(fastify: FastifyInstance) {
    * Records a new activity (played game, achievement, etc)
    */
   fastify.post('/activity', async (request: any) => {
-    const { userId, type, gameId, metadata } = request.body;
+    const { type, gameId, metadata } = request.body;
+    const userId = await resolveId(request.body.userId);
     
-    // If metadata contains gameTitle, we can use it for easier display
     const activity = await prisma.activity.create({
       data: {
         userId,
@@ -73,7 +91,7 @@ export default async function socialRoutes(fastify: FastifyInstance) {
    * Returns friend list
    */
   fastify.get('/friends/:userId', async (request: any) => {
-    const { userId } = request.params;
+    const userId = await resolveId(request.params.userId);
     const friends = await prisma.friend.findMany({
       where: {
         OR: [{ userId }, { friendId: userId }],
@@ -85,23 +103,45 @@ export default async function socialRoutes(fastify: FastifyInstance) {
       }
     });
 
-    // Map to a clean list of friend profiles
     return friends.map(f => f.userId === userId ? f.friend : f.user);
   });
 
   /**
    * GET /api/social/friends/pending/:userId
-   * Returns incoming friend requests
+   * Returns incoming friend requests (filtered by 24h expiration)
    */
   fastify.get('/friends/pending/:userId', async (request: any) => {
-    const { userId } = request.params;
+    const userId = await resolveId(request.params.userId);
+    const expirationDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
     return await prisma.friend.findMany({
       where: {
         friendId: userId,
-        status: 'PENDING'
+        status: 'PENDING',
+        createdAt: { gte: expirationDate }
       },
       include: {
         user: { select: { id: true, username: true, avatarUrl: true } }
+      }
+    });
+  });
+
+  /**
+   * GET /api/social/friends/outgoing/:userId
+   * Returns outgoing friend requests (filtered by 24h expiration)
+   */
+  fastify.get('/friends/outgoing/:userId', async (request: any) => {
+    const userId = await resolveId(request.params.userId);
+    const expirationDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    return await prisma.friend.findMany({
+      where: {
+        userId: userId,
+        status: 'PENDING',
+        createdAt: { gte: expirationDate }
+      },
+      include: {
+        friend: { select: { id: true, username: true, avatarUrl: true } }
       }
     });
   });
@@ -111,10 +151,11 @@ export default async function socialRoutes(fastify: FastifyInstance) {
    * Sends a friend request
    */
   fastify.post('/friends/request', async (request: any, reply) => {
-    const { userId, friendId } = request.body;
+    const userId = await resolveId(request.body.userId);
+    const friendId = await resolveId(request.body.friendId);
+    
     if (userId === friendId) return reply.status(400).send({ error: 'Cannot friend yourself' });
 
-    // Check if relationship already exists in EITHER direction
     const existing = await prisma.friend.findFirst({
       where: {
         OR: [
@@ -126,30 +167,49 @@ export default async function socialRoutes(fastify: FastifyInstance) {
 
     if (existing) {
       if (existing.status === 'ACCEPTED') return { message: 'Already friends' };
-      if (existing.userId === userId) return { message: 'Request already sent' };
       
-      // If the OTHER person already sent a request, auto-accept it!
-      return await prisma.friend.update({
-        where: { id: existing.id },
-        data: { status: 'ACCEPTED' }
-      });
+      const isExpired = existing.status === 'PENDING' && 
+                        new Date(existing.createdAt).getTime() < (Date.now() - 24 * 60 * 60 * 1000);
+      
+      if (isExpired) {
+        // Delete expired request to allow a fresh one
+        await prisma.friend.delete({ where: { id: existing.id } });
+      } else {
+        if (existing.userId === userId) return { message: 'Request already sent' };
+        // If they sent us a request, auto-accept
+        return await prisma.friend.update({
+          where: { id: existing.id },
+          data: { status: 'ACCEPTED' }
+        });
+      }
     }
 
-    return await prisma.friend.create({
-      data: { userId, friendId, status: 'PENDING' }
-    });
+    try {
+      return await prisma.friend.create({
+        data: { userId, friendId, status: 'PENDING' }
+      });
+    } catch (err: any) {
+      if (err.code === 'P2002') return { message: 'Relationship already exists' };
+      throw err;
+    }
   });
 
   /**
    * POST /api/social/friends/accept
    * Accepts a friend request
    */
-  fastify.post('/friends/accept', async (request: any) => {
-    const { userId, friendId } = request.body; // userId is the one accepting
-    return await prisma.friend.update({
-      where: { userId_friendId: { userId: friendId, friendId: userId } },
-      data: { status: 'ACCEPTED' }
-    });
+  fastify.post('/friends/accept', async (request: any, reply) => {
+    const userId = await resolveId(request.body.userId);
+    const friendId = await resolveId(request.body.friendId);
+
+    try {
+      return await prisma.friend.update({
+        where: { userId_friendId: { userId: friendId, friendId: userId } },
+        data: { status: 'ACCEPTED' }
+      });
+    } catch (err: any) {
+      return reply.status(404).send({ error: 'Request not found' });
+    }
   });
 
   /**
@@ -157,23 +217,39 @@ export default async function socialRoutes(fastify: FastifyInstance) {
    * Rejects or cancels a friend request / Unfriends
    */
   fastify.post('/friends/reject', async (request: any) => {
-    const { userId, targetId } = request.body;
-    return await prisma.friend.deleteMany({
-      where: {
-        OR: [
-          { userId, friendId: targetId },
-          { userId: targetId, friendId: userId }
-        ]
-      }
-    });
+    const userId = await resolveId(request.body.userId);
+    const targetId = await resolveId(request.body.targetId);
+
+    fastify.log.info(`[SOCIAL_CMD] Reject/Cancel: ${userId} -> ${targetId}`);
+
+    try {
+      const result = await prisma.friend.deleteMany({
+        where: {
+          OR: [
+            { userId, friendId: targetId },
+            { userId: targetId, friendId: userId }
+          ]
+        }
+      });
+      fastify.log.info(`[SOCIAL_CMD] Deleted ${result.count} relationships`);
+      return { message: 'Relationship removed' };
+    } catch (err: any) {
+      fastify.log.error(`[SOCIAL_CMD] Reject failed: ${err.message}`);
+      return { message: 'Nothing to remove' };
+    }
   });
 
   /**
    * GET /api/social/users/search
-   * Searches for users by username
+   * Searches for users by username (with 24h expiration check)
    */
   fastify.get('/users/search', async (request: any) => {
-    const { query, currentUserId } = request.query;
+    const { query } = request.query;
+    const currentUserId = await resolveId(request.query.currentUserId);
+    const expirationDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    fastify.log.info(`[SOCIAL_SEARCH] Query: "${query}" from user ${currentUserId}`);
+
     if (!query || query.length < 2) return [];
 
     const users = await prisma.user.findMany({
@@ -181,16 +257,10 @@ export default async function socialRoutes(fastify: FastifyInstance) {
         username: { contains: query },
         NOT: { id: currentUserId }
       },
-      select: {
-        id: true,
-        username: true,
-        avatarUrl: true,
-        createdAt: true
-      },
+      select: { id: true, username: true, avatarUrl: true, createdAt: true },
       take: 10
     });
 
-    // Check relationship status for each user
     const userIds = users.map(u => u.id);
     const relationships = await prisma.friend.findMany({
       where: {
@@ -201,13 +271,20 @@ export default async function socialRoutes(fastify: FastifyInstance) {
       }
     });
 
+    fastify.log.info(`[SOCIAL_SEARCH] Found ${users.length} users, ${relationships.length} relationships`);
+
     return users.map(u => {
       const rel = relationships.find(r => r.userId === u.id || r.friendId === u.id);
       let status = 'NONE';
+      
       if (rel) {
-        if (rel.status === 'ACCEPTED') status = 'FRIEND';
-        else if (rel.userId === currentUserId) status = 'SENT';
-        else status = 'PENDING';
+        const isExpired = rel.status === 'PENDING' && new Date(rel.createdAt).getTime() < expirationDate.getTime();
+        
+        if (!isExpired) {
+          if (rel.status === 'ACCEPTED') status = 'FRIEND';
+          else if (rel.userId === currentUserId) status = 'SENT';
+          else status = 'PENDING';
+        }
       }
       return { ...u, relationship: status };
     });
@@ -218,10 +295,9 @@ export default async function socialRoutes(fastify: FastifyInstance) {
    * Returns a friend's in-app stats and trophies
    */
   fastify.get('/friends/profile/:friendId', async (request: any, reply) => {
-    const { friendId } = request.params;
-    const { userId } = request.query; // Current user
+    const friendId = await resolveId(request.params.friendId);
+    const userId = await resolveId(request.query.userId);
 
-    // Verify friendship
     const friendship = await prisma.friend.findFirst({
       where: {
         OR: [
@@ -238,44 +314,25 @@ export default async function socialRoutes(fastify: FastifyInstance) {
     const friend = await prisma.user.findUnique({
       where: { id: friendId },
       select: {
-        id: true,
-        username: true,
-        avatarUrl: true,
-        createdAt: true,
-        _count: {
-          select: {
-            games: true,
-            achievements: true,
-            badges: true
-          }
-        }
+        id: true, username: true, avatarUrl: true, createdAt: true,
+        _count: { select: { games: true, achievements: true, badges: true } }
       }
     });
 
-    // Get in-app trophies only
     const trophies = await prisma.userAchievement.findMany({
       where: { userId: friendId },
-      include: {
-        achievement: true
-      },
+      include: { achievement: true },
       orderBy: { earnedAt: 'desc' },
       take: 20
     });
 
-    // Get most played games (in-app stats)
     const games = await prisma.userGame.findMany({
       where: { userId: friendId },
-      include: {
-        game: { select: { title: true, coverUrl: true } }
-      },
+      include: { game: { select: { title: true, coverUrl: true } } },
       orderBy: { totalPlaytime: 'desc' },
       take: 5
     });
 
-    return {
-      profile: friend,
-      trophies,
-      games
-    };
+    return { profile: friend, trophies, games };
   });
 }

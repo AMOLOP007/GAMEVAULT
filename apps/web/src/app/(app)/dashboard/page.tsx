@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
 import { formatPlaytime, formatDate } from '@/lib/utils';
@@ -21,10 +22,12 @@ import {
   Swords,
   Users,
   Sparkles,
-  Zap
+  Zap,
+  ChevronRight
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  AreaChart, Area
 } from 'recharts';
 import BugReportSection from '@/components/dashboard/BugReportSection';
 import VisualAnalytics from '@/components/dashboard/VisualAnalytics';

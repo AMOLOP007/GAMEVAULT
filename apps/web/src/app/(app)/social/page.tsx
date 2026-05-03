@@ -31,10 +31,12 @@ export default function SocialPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [friends, setFriends] = useState<any[]>([]);
   const [pending, setPending] = useState<any[]>([]);
+  const [outgoing, setOutgoing] = useState<any[]>([]);
   const [selectedFriend, setSelectedFriend] = useState<any>(null);
   const [friendProfile, setFriendProfile] = useState<any>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [activeTab, setActiveTab] = useState<'friends' | 'search' | 'requests'>('friends');
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -42,26 +44,39 @@ export default function SocialPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.length >= 2) {
+        handleSearch();
+      } else {
+        setSearchResults([]);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const loadSocialData = async () => {
     try {
-      const [f, p] = await Promise.all([
+      const [f, p, o] = await Promise.all([
         api.get<any[]>(`/api/social/friends/${user?.id}`),
-        api.get<any[]>(`/api/social/friends/pending/${user?.id}`)
+        api.get<any[]>(`/api/social/friends/pending/${user?.id}`),
+        api.get<any[]>(`/api/social/friends/outgoing/${user?.id}`)
       ]);
       setFriends(f);
       setPending(p);
+      setOutgoing(o);
     } catch (err) {
       console.error('Failed to load social data', err);
     }
   };
 
   const handleSearch = async () => {
-    if (searchQuery.length < 2) return;
     setIsSearching(true);
     try {
       const res = await api.get<any[]>(`/api/social/users/search?query=${searchQuery}&currentUserId=${user?.id}`);
       setSearchResults(res);
-      setActiveTab('search');
+      // If we are already on the search tab, don't force it, otherwise just show suggestions
     } catch (err) {
       console.error('Search failed', err);
     } finally {
@@ -70,9 +85,13 @@ export default function SocialPage() {
   };
 
   const sendRequest = async (friendId: string) => {
+    // Prevent multiple clicks/requests
+    const userInSearch = searchResults.find(u => u.id === friendId);
+    if (userInSearch?.relationship === 'SENT') return;
+
     try {
       await api.post('/api/social/friends/request', { userId: user?.id, friendId });
-      handleSearch(); // Refresh search results to show "SENT"
+      await Promise.all([loadSocialData(), handleSearch()]);
     } catch (err) {
       console.error('Request failed', err);
     }
@@ -81,7 +100,7 @@ export default function SocialPage() {
   const acceptRequest = async (friendId: string) => {
     try {
       await api.post('/api/social/friends/accept', { userId: user?.id, friendId });
-      loadSocialData();
+      await loadSocialData();
     } catch (err) {
       console.error('Accept failed', err);
     }
@@ -90,7 +109,7 @@ export default function SocialPage() {
   const rejectRequest = async (targetId: string) => {
     try {
       await api.post('/api/social/friends/reject', { userId: user?.id, targetId });
-      loadSocialData();
+      await Promise.all([loadSocialData(), handleSearch()]);
       if (selectedFriend?.id === targetId) setSelectedFriend(null);
     } catch (err) {
       console.error('Reject failed', err);
@@ -100,6 +119,7 @@ export default function SocialPage() {
   const viewProfile = async (friend: any) => {
     setSelectedFriend(friend);
     setLoadingProfile(true);
+    setShowSuggestions(false);
     try {
       const res = await api.get(`/api/social/friends/profile/${friend.id}?userId=${user?.id}`);
       setFriendProfile(res);
@@ -122,17 +142,94 @@ export default function SocialPage() {
           <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mt-2">Connect • Compare • Conquer</p>
         </div>
 
-        <div className="relative group w-full md:w-96">
+        <div className="relative group w-full md:w-96 z-50">
           <input
             type="text"
             placeholder="Search users..."
             value={searchQuery}
+            onFocus={() => setShowSuggestions(true)}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setActiveTab('search');
+                setShowSuggestions(false);
+                handleSearch();
+              }
+            }}
             className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-6 py-4 pl-12 text-sm text-white focus:outline-none focus:border-[#8b5cf6]/50 transition-all placeholder:text-slate-600"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-[#8b5cf6] transition-colors" />
           {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8b5cf6] animate-spin" />}
+
+          {/* Suggestions Dropdown */}
+          <AnimatePresence>
+            {showSuggestions && searchResults.length > 0 && (
+              <motion.div
+                key="search-suggestions"
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                className="absolute top-full left-0 right-0 mt-3 p-2 bg-[#0c0c1d] border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl z-[100]"
+              >
+                {searchResults.map((u) => (
+                  <motion.div
+                    key={u.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (u.relationship === 'FRIEND') viewProfile(u);
+                      else {
+                        setActiveTab('search');
+                        setShowSuggestions(false);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (u.relationship === 'FRIEND') viewProfile(u);
+                        else {
+                          setActiveTab('search');
+                          setShowSuggestions(false);
+                        }
+                      }
+                    }}
+                    className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-white/[0.05] transition-all text-left group cursor-pointer"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-white italic">
+                      {u.username[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-black text-white group-hover:text-[#c084fc] transition-colors">{u.username}</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                        {u.relationship === 'FRIEND' ? 'Ally' : u.relationship === 'SENT' ? 'Request Sent' : 'Global User'}
+                      </p>
+                    </div>
+                    {u.relationship === 'NONE' && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendRequest(u.id);
+                        }}
+                        className="p-2 rounded-lg bg-[#8b5cf6]/20 text-[#8b5cf6] hover:bg-[#8b5cf6]/30 transition-colors"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                      </button>
+                    )}
+                  </motion.div>
+                ))}
+                <div className="p-2 mt-2 border-t border-white/5">
+                  <button 
+                    onClick={() => {
+                      setActiveTab('search');
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors flex items-center justify-center gap-2"
+                  >
+                    View All Results <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -148,7 +245,7 @@ export default function SocialPage() {
                   activeTab === t ? 'bg-[#8b5cf6] text-white shadow-lg' : 'text-slate-500 hover:text-white'
                 }`}
               >
-                {t} {t === 'requests' && pending.length > 0 && `(${pending.length})`}
+                {t} {(t === 'requests') && (pending.length + outgoing.length) > 0 && `(${pending.length + outgoing.length})`}
               </button>
             ))}
           </div>
@@ -156,95 +253,166 @@ export default function SocialPage() {
           <div className="glass-panel min-h-[500px] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-white/5 bg-white/[0.01]">
                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                  {activeTab === 'friends' ? 'My Allies' : activeTab === 'requests' ? 'Pending Access' : 'Discovery Results'}
+                  {activeTab === 'friends' ? 'My Allies' : activeTab === 'requests' ? 'Access Control' : 'Discovery Results'}
                </h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                <AnimatePresence mode="popLayout">
-                  {activeTab === 'friends' && friends.map((f) => (
-                    <motion.button
-                      layout
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      key={f.id}
-                      onClick={() => viewProfile(f)}
-                      className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left group ${
-                        selectedFriend?.id === f.id ? 'bg-[#8b5cf6]/10 border-[#8b5cf6]/30' : 'bg-transparent border-transparent hover:bg-white/[0.03]'
-                      }`}
-                    >
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#8b5cf6] to-[#d946ef] p-[1.5px] shrink-0">
-                        <div className="w-full h-full rounded-[9px] bg-[#0c0c1d] flex items-center justify-center font-black text-white uppercase italic">
-                           {f.username[0]}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-white group-hover:text-[#c084fc] transition-colors">{f.username}</p>
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Level 24 Commander</p>
-                      </div>
-                      <ArrowRight className={`w-4 h-4 text-[#8b5cf6] transition-all ${selectedFriend?.id === f.id ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}`} />
-                    </motion.button>
-                  ))}
-
-                  {activeTab === 'requests' && pending.map((req) => (
-                    <motion.div
-                      layout
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      key={req.id}
-                      className="flex items-center gap-4 p-4 rounded-2xl bg-[#8b5cf6]/5 border border-[#8b5cf6]/10"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-white">
-                        {req.user.username[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-white">{req.user.username}</p>
-                        <p className="text-[9px] font-bold text-[#8b5cf6] uppercase tracking-widest">Wants to ally</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => acceptRequest(req.user.id)} className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"><Check className="w-4 h-4" /></button>
-                        <button onClick={() => rejectRequest(req.user.id)} className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"><X className="w-4 h-4" /></button>
-                      </div>
-                    </motion.div>
-                  ))}
-
-                  {activeTab === 'search' && searchResults.map((u) => (
-                    <motion.div
-                      layout
-                      key={u.id}
-                      className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/[0.03] transition-all border border-transparent hover:border-white/5"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-white">
-                        {u.username[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-white">{u.username}</p>
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Found in global cache</p>
-                      </div>
-                      {u.relationship === 'NONE' && (
-                        <button 
-                          onClick={() => sendRequest(u.id)}
-                          className="px-3 py-1.5 rounded-lg bg-[#8b5cf6] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#7c3aed] transition-colors flex items-center gap-2"
+                  {activeTab === 'friends' && (
+                    <motion.div key="friends-list" className="space-y-3">
+                      {friends.map((f) => (
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          key={f.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => viewProfile(f)}
+                          onKeyDown={(e) => e.key === 'Enter' && viewProfile(f)}
+                          className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left group cursor-pointer ${
+                            selectedFriend?.id === f.id 
+                              ? 'bg-gradient-to-r from-[#8b5cf6]/20 to-transparent border-[#8b5cf6]/40 shadow-[0_0_20px_rgba(139,92,246,0.1)]' 
+                              : 'bg-white/[0.01] border-white/5 hover:bg-white/[0.04] hover:border-white/10'
+                          }`}
                         >
-                          <UserPlus className="w-3 h-3" /> Add
-                        </button>
-                      )}
-                      {u.relationship === 'SENT' && (
-                        <span className="text-[9px] font-black uppercase text-[#8b5cf6] tracking-widest border border-[#8b5cf6]/20 px-2 py-1 rounded-md bg-[#8b5cf6]/10">Sent</span>
-                      )}
-                      {u.relationship === 'FRIEND' && (
-                        <span className="text-[9px] font-black uppercase text-green-400 tracking-widest">Ally</span>
+                          <div className="relative shrink-0">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#8b5cf6] to-[#d946ef] p-[1.5px]">
+                              <div className="w-full h-full rounded-[9px] bg-[#0c0c1d] flex items-center justify-center font-black text-white uppercase italic text-lg">
+                                 {f.username[0]}
+                              </div>
+                            </div>
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0c0c1d] p-0.5">
+                               <div className="w-full h-full rounded-full bg-green-500 animate-pulse" />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-black tracking-tight transition-colors ${selectedFriend?.id === f.id ? 'text-[#c084fc]' : 'text-white group-hover:text-[#c084fc]'}`}>{f.username}</p>
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mt-1">Level 24 Commander</p>
+                          </div>
+                          <ArrowRight className={`w-4 h-4 text-[#8b5cf6] transition-all duration-300 ${selectedFriend?.id === f.id ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}`} />
+                        </motion.div>
+                      ))}
+                      {friends.length === 0 && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} key="empty-friends" className="flex flex-col items-center justify-center py-20 opacity-20 text-center px-6">
+                           <Zap className="w-12 h-12 mb-4 animate-bounce duration-[3000ms]" />
+                           <p className="text-xs font-black uppercase tracking-[0.2em]">No Allies Found</p>
+                        </motion.div>
                       )}
                     </motion.div>
-                  ))}
+                  )}
 
-                  {((activeTab === 'friends' && friends.length === 0) || 
-                    (activeTab === 'requests' && pending.length === 0) || 
-                    (activeTab === 'search' && searchResults.length === 0)) && (
-                    <div className="flex flex-col items-center justify-center py-20 opacity-20 text-center px-6">
-                       <Zap className="w-12 h-12 mb-4" />
-                       <p className="text-xs font-black uppercase tracking-[0.2em]">No Data in this Channel</p>
-                    </div>
+                  {activeTab === 'requests' && (
+                    <motion.div key="requests-list" className="space-y-3">
+                      {/* Incoming Requests */}
+                      {pending.length > 0 ? (
+                        <div className="mb-4">
+                          <p className="text-[8px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2 ml-2">Incoming</p>
+                          <div className="space-y-2">
+                            {pending.map((req) => (
+                              <motion.div
+                                layout
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                key={`pending-${req.id}`}
+                                className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-green-500/5 to-transparent border border-green-500/10 relative overflow-hidden group"
+                              >
+                                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-white italic shrink-0">
+                                  {req.user.username[0]}
+                                </div>
+                                <div className="flex-1 min-w-0 relative z-10">
+                                  <p className="text-sm font-black text-white tracking-tight">{req.user.username}</p>
+                                  <p className="text-[9px] font-black text-green-400 uppercase tracking-widest mt-0.5">Wants to ally</p>
+                                </div>
+                                <div className="flex gap-2 relative z-10">
+                                  <button onClick={() => acceptRequest(req.user.id)} className="p-2.5 rounded-xl bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 transition-all active:scale-90"><Check className="w-4 h-4" /></button>
+                                  <button onClick={() => rejectRequest(req.user.id)} className="p-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all active:scale-90"><X className="w-4 h-4" /></button>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* Outgoing Requests */}
+                      {outgoing.length > 0 ? (
+                        <div>
+                          <p className="text-[8px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2 ml-2">Requests Sent To</p>
+                          <div className="space-y-2">
+                            {outgoing.map((req) => (
+                              <motion.div
+                                layout
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                key={`outgoing-${req.id}`}
+                                className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-[#8b5cf6]/5 to-transparent border border-[#8b5cf6]/10 relative overflow-hidden group"
+                              >
+                                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-white italic shrink-0">
+                                  {req.friend.username[0]}
+                                </div>
+                                <div className="flex-1 min-w-0 relative z-10">
+                                  <p className="text-sm font-black text-white tracking-tight">{req.friend.username}</p>
+                                  <p className="text-[9px] font-black text-[#8b5cf6] uppercase tracking-widest mt-0.5">Pending Approval</p>
+                                </div>
+                                <div className="flex gap-2 relative z-10">
+                                  <button onClick={() => rejectRequest(req.friend.id)} className="p-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all active:scale-90" title="Cancel Request"><X className="w-4 h-4" /></button>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {pending.length === 0 && outgoing.length === 0 && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} key="empty-requests" className="flex flex-col items-center justify-center py-20 opacity-20 text-center px-6">
+                           <ShieldAlert className="w-12 h-12 mb-4 animate-pulse" />
+                           <p className="text-xs font-black uppercase tracking-[0.2em]">No Pending Requests</p>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {activeTab === 'search' && (
+                    <motion.div key="search-results" className="space-y-3">
+                      {searchResults.map((u) => (
+                        <motion.div
+                          layout
+                          key={u.id}
+                          className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/[0.03] transition-all border border-white/5 group relative"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-black text-white italic shrink-0">
+                            {u.username[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-black text-white tracking-tight group-hover:text-[#c084fc] transition-colors">{u.username}</p>
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Global Player</p>
+                          </div>
+                          {u.relationship === 'NONE' && (
+                            <button 
+                              onClick={() => sendRequest(u.id)}
+                              className="px-4 py-2 rounded-xl bg-[#8b5cf6] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#7c3aed] transition-all active:scale-95 shadow-[0_0_15px_rgba(139,92,246,0.3)] flex items-center gap-2"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" /> Add
+                            </button>
+                          )}
+                          {u.relationship === 'SENT' && (
+                            <span className="text-[9px] font-black uppercase text-[#8b5cf6] tracking-widest border border-[#8b5cf6]/20 px-3 py-1.5 rounded-xl bg-[#8b5cf6]/10 backdrop-blur-md">Request Sent</span>
+                          )}
+                          {u.relationship === 'FRIEND' && (
+                            <span className="text-[9px] font-black uppercase text-green-400 tracking-widest flex items-center gap-1.5">
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> Ally
+                            </span>
+                          )}
+                        </motion.div>
+                      ))}
+                      {searchResults.length === 0 && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} key="empty-search" className="flex flex-col items-center justify-center py-20 opacity-20 text-center px-6">
+                           <Search className="w-12 h-12 mb-4" />
+                           <p className="text-xs font-black uppercase tracking-[0.2em]">No Users Found</p>
+                        </motion.div>
+                      )}
+                    </motion.div>
                   )}
                </AnimatePresence>
             </div>

@@ -2,13 +2,15 @@ import axios from 'axios';
 import log from 'electron-log';
 import store from '../store.js';
 
+import { API_BASE_URL } from '../config.js';
+
 export type ActivityType = 'STARTED_PLAYING' | 'EARNED_ACHIEVEMENT' | 'ADDED_GAME';
 
 export class ActivityService {
   private apiUrl: string;
 
   constructor() {
-    this.apiUrl = `http://localhost:${process.env.API_PORT || 3001}/api/social`;
+    this.apiUrl = `${API_BASE_URL}/api/social`;
   }
 
   public async reportActivity(type: ActivityType, gameId?: string, metadata?: any) {

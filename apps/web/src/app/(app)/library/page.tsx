@@ -177,7 +177,7 @@ export default function LibraryPage() {
       </div>
 
       {/* ── Game Grid ── */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {loading && games.length === 0 ? (
           <motion.div
             key="loading"

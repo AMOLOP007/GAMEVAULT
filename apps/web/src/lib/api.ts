@@ -3,7 +3,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001
 class ApiClient {
   private token: string | null = null;
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
-  private CACHE_TTL = 30000; // 30 seconds
+  private CACHE_TTL = 1000; // 1 second - Near-instant UI updates
   private MAX_CACHE_SIZE = 50; // PERF: Hard cap to prevent unbounded memory growth
 
   setToken(token: string | null) {
