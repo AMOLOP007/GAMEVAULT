@@ -71,7 +71,7 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#8b5cf6]/10 border border-[#8b5cf6]/20 text-[#c084fc] text-[10px] font-black uppercase tracking-widest"
             >
-              <Sparkles className="w-3 h-3" /> System Operational
+              <Sparkles className="w-3 h-3" /> System Operational v1.2.0
             </motion.div>
             <motion.h1 
               initial={{ opacity: 0, y: 20 }}
