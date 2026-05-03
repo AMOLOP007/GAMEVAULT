@@ -227,12 +227,12 @@ export default function LandingPage() {
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {[
-                { icon: Zap, t: "Hyper-Tracking", d: "Zero manual logging. Low-level precision.", c: "#8b5cf6" },
-                { icon: Shield, t: "Local Isolation", d: "Your data stays in your vault. Total privacy.", c: "#3b82f6" },
-                { icon: Fingerprint, t: "System Scan", d: "Detects installed games across all drives.", c: "#d946ef" },
-                { icon: Globe, t: "Unified Cloud", d: "Sync seamlessly while maintaining performance.", c: "#34d399" },
-                { icon: BarChart3, t: "Data Alchemy", d: "Transform hours into beautiful analytics.", c: "#fbbf24" },
-                { icon: Rocket, t: "Ultra Minimal", d: "Clean, distraction-free performance UI.", c: "#f87171" }
+                { icon: Zap, t: "Synaptic Engine", d: "Reconstructs lost playtime history using AI pattern analysis.", c: "#8b5cf6" },
+                { icon: Shield, t: "Data Integrity", d: "High-value wins policy. Never lose a second of your grind.", c: "#3b82f6" },
+                { icon: Fingerprint, t: "Forensic Sync", d: "Reads local Steam files for 99.9% playtime accuracy.", c: "#d946ef" },
+                { icon: Globe, t: "Instant Pulse", d: "Optimized transitions and zero-lag tab switching.", c: "#34d399" },
+                { icon: BarChart3, t: "Visual Momentum", d: "Beautiful engagement flows spread across your week.", c: "#fbbf24" },
+                { icon: Rocket, t: "1.2 Stabilization", d: "Critical fixes for API stability and auth reliability.", c: "#f87171" }
               ].map((f, i) => (
                 <motion.div
                   key={i}
