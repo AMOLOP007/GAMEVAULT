@@ -72,7 +72,7 @@ export default function LandingPage() {
   const scale = useTransform(smoothProgress, [0, 0.2], [1, 0.9]);
   const opacity = useTransform(smoothProgress, [0, 0.1], [1, 0]);
 
-  const DOWNLOAD_URL = "https://github.com/AMOLOP007/GAMEVAULT/releases/download/v1.2.0/GameVault-Setup-1.2.0.exe";
+  const DOWNLOAD_URL = "https://github.com/AMOLOP007/GAMEVAULT/releases/download/v1.3.0/GameVault-Setup-1.3.0.exe";
 
   return (
     <div ref={containerRef} className="bg-[#030308] text-white selection:bg-[#8b5cf6]/50 overflow-x-hidden font-sans">
@@ -142,7 +142,7 @@ export default function LandingPage() {
               variants={itemVariants}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-[#8b5cf6]/10 border border-[#8b5cf6]/20 text-[#c084fc] text-[9px] font-black uppercase tracking-[0.4em] mb-12"
             >
-              <Sparkles className="w-3 h-3" /> System Operational v1.2.0
+              <Sparkles className="w-3 h-3" /> System Operational v1.3.0
             </motion.div>
 
             <motion.h1 
@@ -232,7 +232,7 @@ export default function LandingPage() {
                 { icon: Fingerprint, t: "Forensic Sync", d: "Reads local Steam files for 99.9% playtime accuracy.", c: "#d946ef" },
                 { icon: Globe, t: "Instant Pulse", d: "Optimized transitions and zero-lag tab switching.", c: "#34d399" },
                 { icon: BarChart3, t: "Visual Momentum", d: "Beautiful engagement flows spread across your week.", c: "#fbbf24" },
-                { icon: Rocket, t: "1.2 Stabilization", d: "Critical fixes for API stability and auth reliability.", c: "#f87171" }
+                { icon: Rocket, t: "1.3 Stabilization", d: "Critical fixes for cracked game discovery and local icon extraction.", c: "#f87171" }
               ].map((f, i) => (
                 <motion.div
                   key={i}
@@ -336,7 +336,7 @@ export default function LandingPage() {
                  <AnimatedButton size="lg" onClick={() => window.location.href = DOWNLOAD_URL} className="px-20 h-24 text-3xl font-black uppercase tracking-tighter shadow-[0_40px_120px_rgba(139,92,246,0.6)]">
                    Download Setup <Download className="ml-4 w-8 h-8" />
                  </AnimatedButton>
-                 <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">v1.2.0 Stable • Free • Open Source</p>
+                 <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">v1.3.0 Stable • Free • Open Source</p>
               </div>
            </motion.div>
         </section>

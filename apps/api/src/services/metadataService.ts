@@ -41,9 +41,11 @@ export async function hydrateGameMetadata(gameId: string) {
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) return;
 
-  // Hydrate basic metadata if missing
-  if (!game.coverUrl && RAWG_API_KEY) {
-    console.log(`[Metadata] Fetching metadata for: ${game.title}`);
+  const hasOfficialCover = game.coverUrl && !game.coverUrl.startsWith('data:');
+
+  // Hydrate basic metadata if missing official cover or high-fidelity title
+  if ((!hasOfficialCover || game.title.length < 5) && RAWG_API_KEY) {
+    console.log(`[Metadata] Fetching high-fidelity metadata for: ${game.title}`);
     try {
       let results = [];
       
@@ -77,6 +79,7 @@ export async function hydrateGameMetadata(gameId: string) {
         await (prisma as any).game.update({
           where: { id: gameId },
           data: {
+            title: result.name,
             coverUrl: result.background_image,
             genre: result.genres?.map((g: any) => g.name).join(', ') || 'Unknown',
             description: result.description_raw || game.description || '',
