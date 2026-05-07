@@ -494,6 +494,19 @@ async function handleLaunch(gameId: string, options?: { forceExe?: boolean }) {
             } else if (cloudGame.gogAppId) {
               log.info(`[Main] Searching local DB by GOG ID: ${cloudGame.gogAppId}`);
               game = await prisma.game.findUnique({ where: { gogAppId: Number(cloudGame.gogAppId) } });
+            } else if (cloudGame.exePath) {
+              log.info(`[Main] Searching local DB by Exe Path: ${cloudGame.exePath}`);
+              game = await prisma.game.findUnique({ where: { exePath: cloudGame.exePath } });
+            }
+
+            // Final fallback: Title match
+            if (!game && cloudGame.title) {
+              log.info(`[Main] Searching local DB by Title: ${cloudGame.title}`);
+              game = await prisma.game.findFirst({ 
+                where: { 
+                  title: { contains: cloudGame.title } 
+                } 
+              });
             }
           }
           

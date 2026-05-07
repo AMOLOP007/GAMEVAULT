@@ -89,7 +89,6 @@ export default async function gameRoutes(fastify: FastifyInstance) {
             epicAppId, gogAppId, source, launchUri
           }
         });
-        hydrateGameMetadata(game.id).catch(console.error);
       } catch (err: any) {
         // Handle unique constraint violations (e.g. same title or same exePath)
         if (err.code === 'P2002') {
@@ -104,7 +103,6 @@ export default async function gameRoutes(fastify: FastifyInstance) {
           
           // If we found the game by exePath but the title was different (e.g. from an older scanner version)
           // Update the title to the better one discovered now
-          if (game && game.title !== title && (game.title.length < 5 || game.title === 'Binaries')) {
              game = await prisma.game.update({
                where: { id: game.id },
                data: { title }
@@ -121,6 +119,9 @@ export default async function gameRoutes(fastify: FastifyInstance) {
       console.error(`[API] Failed to resolve or create game: ${title}`, { exePath, steamAppId, epicAppId });
       throw new Error('Failed to resolve or create game');
     }
+
+    // Ensure metadata hydration is triggered (covers both new creations and P2002 resolutions)
+    hydrateGameMetadata(game.id).catch(console.error);
 
     // Add to user library using upsert to handle concurrency
     const { getActiveActivity } = await import('../services/playtimeService.js');
