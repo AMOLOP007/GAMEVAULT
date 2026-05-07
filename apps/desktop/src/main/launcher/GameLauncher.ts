@@ -4,7 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import log from 'electron-log'
 
-export type LaunchMethod = 'steam' | 'epic' | 'gog' | 'exe' | 'uri'
+export type LaunchMethod = 'steam' | 'epic' | 'gog' | 'exe' | 'uri' | 'stove'
 
 export interface LaunchConfig {
   gameId: string
@@ -22,6 +22,7 @@ export interface LaunchResult {
   success: boolean
   error?: string
   method?: LaunchMethod
+  processHandle?: any
 }
 
 export class GameLauncher {
@@ -72,10 +73,13 @@ export class GameLauncher {
     }
   }
 
-  private async launchViaEpic(appId: string): Promise<void> {
-    const uri = `com.epicgames.launcher://apps/${appId}?action=launch&silent=true`
+  private async launchViaEpic(appId: string, launchUri?: string): Promise<void> {
+    // Prefer a stored launch URI (contains correct AppName) over constructing from epicAppId
+    // epicAppId stores the CatalogNamespace (sandbox ID for achievement API) which is different
+    // from the AppName used in the launcher protocol
+    const uri = launchUri || `com.epicgames.launcher://apps/${appId}?action=launch&silent=true`
     await shell.openExternal(uri)
-    log.info(`[Launcher] Epic Games launch triggered for ${appId}`)
+    log.info(`[Launcher] Epic Games launch triggered (uri: ${uri})`)
   }
 
   private async launchViaGOG(gogAppId: number | string, exePath?: string): Promise<void> {
@@ -93,7 +97,7 @@ export class GameLauncher {
     }
   }
 
-  private async launchViaExe(exePath: string, workingDir?: string): Promise<void> {
+  private async launchViaExe(exePath: string, workingDir?: string): Promise<any> {
     // SECURITY: Require absolute paths only
     if (!path.isAbsolute(exePath)) {
       throw new Error(`Executable path must be absolute: ${exePath}`)
@@ -126,7 +130,7 @@ export class GameLauncher {
 
     try {
       const child = spawn(normalized, [], {
-        detached: false, // SECURITY: do not detach — track the child process
+        detached: true, // Allow it to live beyond GameVault if needed, but we still track it
         stdio: 'ignore',
         cwd,
         windowsHide: false,
@@ -139,6 +143,7 @@ export class GameLauncher {
 
       child.unref()
       log.info(`[Launcher] Successfully spawned process: ${child.pid}`)
+      return child // Return the handle for the tracker
     } catch (err: any) {
       log.error(`[Launcher] Failed to spawn process: ${err.message}`)
       throw new Error(`Failed to launch executable: ${err.message}. Try running GameVault as administrator if this continues.`)
@@ -150,27 +155,57 @@ export class GameLauncher {
   }
 
   async launch(config: LaunchConfig): Promise<LaunchResult> {
+    let childHandle: any = null;
     try {
-      log.info(`[Launcher] Launching ${config.title} via ${config.method}`)
+      log.info(`[Launcher] Launching ${config.title} (Method: ${config.method}, EXE: ${config.exePath})`)
+      
+      // 1. Manual EXE Priority: If user explicitly provided an EXE, use it.
+      // We assume if method is 'exe', it's already prioritized.
       
       switch (config.method) {
-        case 'steam': await this.launchViaSteam(config.steamAppId!, config.exePath)
+        case 'steam': 
+          await this.launchViaSteam(config.steamAppId!, config.exePath)
           break
-        case 'epic':  await this.launchViaEpic(config.epicAppId!)
+        case 'epic':  
+          await this.launchViaEpic(config.epicAppId!, config.launchUri)
           break
-        case 'gog':   await this.launchViaGOG(config.gogAppId!, config.exePath)
+        case 'gog':   
+          await this.launchViaGOG(config.gogAppId!, config.exePath)
           break
-        case 'exe':   await this.launchViaExe(config.exePath!, config.workingDirectory)
+        case 'exe':   
+          childHandle = await this.launchViaExe(config.exePath!, config.workingDirectory)
           break
-        case 'uri':   await this.launchViaUri(config.launchUri!)
+        case 'uri':   
+          await this.launchViaUri(config.launchUri!)
+          break
+        case 'stove': 
+          if (config.launchUri) {
+            await this.launchViaUri(config.launchUri)
+          } else if (config.exePath) {
+            childHandle = await this.launchViaExe(config.exePath)
+          } else {
+            throw new Error('No URI or EXE path provided for Stove game')
+          }
           break
         default:
           throw new Error(`Unknown launch method: ${config.method}`)
       }
       
-      return { success: true, method: config.method }
+      return { success: true, method: config.method, processHandle: childHandle }
     } catch (err: any) {
       log.error(`[Launcher] Failed to launch ${config.title}:`, err)
+      
+      // Fallback: If platform launch failed, try direct EXE if available
+      if (config.exePath && config.method !== 'exe') {
+        log.warn(`[Launcher] Platform launch failed for ${config.title}. Falling back to direct EXE...`)
+        try {
+          const handle = await this.launchViaExe(config.exePath)
+          return { success: true, method: 'exe', processHandle: handle }
+        } catch (fallbackErr: any) {
+          log.error(`[Launcher] Fallback EXE launch also failed: ${fallbackErr.message}`)
+        }
+      }
+      
       return { success: false, error: err.message, method: config.method }
     }
   }

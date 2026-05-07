@@ -16,6 +16,7 @@ interface AchievementData {
 
 let igdbToken: string | null = null;
 let igdbTokenExpiry = 0;
+let igdbErrorLogged = false;
 
 async function getIGDBToken() {
   if (igdbToken && Date.now() < igdbTokenExpiry) return igdbToken;
@@ -25,9 +26,13 @@ async function getIGDBToken() {
     const res = await axios.post(`https://id.twitch.tv/oauth2/token?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_CLIENT_SECRET}&grant_type=client_credentials`);
     igdbToken = res.data.access_token;
     igdbTokenExpiry = Date.now() + (res.data.expires_in * 1000) - 60000;
+    igdbErrorLogged = false;
     return igdbToken;
   } catch (err: any) {
-    console.error(`[IGDB] Failed to get OAuth token: ${err.message}`);
+    if (!igdbErrorLogged) {
+      console.warn(`[IGDB] Failed to get OAuth token (Client ID might be invalid). IGDB lookup disabled.`);
+      igdbErrorLogged = true;
+    }
     return null;
   }
 }
@@ -127,6 +132,12 @@ async function getAchievements(gameId: string): Promise<AchievementData[] | null
     if (steamData && steamData.length > 0) return steamData;
   }
 
+  // 1.5. Epic Games Store (GraphQL)
+  if (game.epicAppId) {
+    const epicData = await fetchFromEpic(game.epicAppId);
+    if (epicData && epicData.length > 0) return epicData;
+  }
+
   // 2. RAWG API
   if (game.rawgId || game.title) {
     const rawgData = await fetchFromRAWG(game.rawgId, game.title);
@@ -198,6 +209,81 @@ async function fetchFromRAWG(rawgId?: string | null, title?: string): Promise<Ac
       iconUrl: a.image
     })) || null;
   } catch { return null; }
+}
+
+async function fetchFromEpic(sandboxId: string): Promise<AchievementData[] | null> {
+  try {
+    const query = `
+      query getAchievementDefinitions($sandboxId: String!, $locale: String) {
+        Achievement {
+          getAchievementDefinitions(sandboxId: $sandboxId, locale: $locale) {
+            achievements {
+              achievementId
+              name
+              description
+              unlockedIconId
+              lockedIconId
+            }
+          }
+        }
+      }
+    `;
+
+    const res = await axios.post('https://graphql.epicgames.com/graphql', {
+      query,
+      variables: { sandboxId, locale: 'en-US' }
+    });
+
+    const achievements = res.data?.data?.Achievement?.getAchievementDefinitions?.achievements;
+    if (!achievements) return null;
+
+    return achievements.map((a: any) => ({
+      key: `epic_${a.achievementId}`,
+      title: a.name,
+      description: a.description || '',
+      iconUrl: a.unlockedIconId
+    }));
+  } catch (err) {
+    console.error(`[EpicMetadata] Failed to fetch for ${sandboxId}:`, err);
+    return null;
+  }
+}
+
+export async function searchEpicSandboxId(title: string): Promise<string | null> {
+  try {
+    const query = `
+      query searchStore($keywords: String!) {
+        Catalog {
+          searchStore(keywords: $keywords, count: 5) {
+            elements {
+              title
+              namespace
+              categories { path }
+            }
+          }
+        }
+      }
+    `;
+
+    const res = await axios.post('https://graphql.epicgames.com/graphql', {
+      query,
+      variables: { keywords: title }
+    });
+
+    const elements = res.data?.data?.Catalog?.searchStore?.elements;
+    if (!elements || elements.length === 0) return null;
+
+    // Filter for games or editions
+    const bestMatch = elements.find((e: any) => 
+      e.categories?.some((c: any) => c.path.includes('games')) || 
+      e.title.toLowerCase() === title.toLowerCase()
+    ) || elements[0];
+
+    return bestMatch.namespace;
+  } catch (err) {
+    console.error(`[EpicSearch] Failed for ${title}:`, err);
+    return null;
+  }
 }
 
 async function fetchFromIGDB(igdbId?: string | null, title?: string): Promise<AchievementData[] | null> {
@@ -286,8 +372,26 @@ export async function hydrateAllMissingMetadata() {
     where: { coverUrl: null }
   });
 
-  console.log(`[Metadata] Bulk hydrating ${games.length} games in background...`);
-  games.forEach(game => {
-    hydrateGameMetadata(game.id).catch(console.error);
-  });
+  if (games.length === 0) return;
+
+  console.log(`[Metadata] Bulk hydrating ${games.length} games in background (max 3 concurrent)...`);
+
+  // PERF: Limit to 3 concurrent hydrations to avoid spiking CPU/network on startup.
+  // Each hydrateGameMetadata call makes multiple HTTP requests and DB writes.
+  // Unbounded parallelism was crashing low-end machines on first library load.
+  const { default: pLimit } = await import('p-limit');
+  const limit = pLimit(3);
+
+  const tasks = games.map(game =>
+    limit(async () => {
+      await hydrateGameMetadata(game.id).catch(err =>
+        console.warn(`[Metadata] Hydration failed for ${game.title}: ${err.message}`)
+      );
+      // Small delay between items to stay under RAWG's rate limit
+      await new Promise(resolve => setTimeout(resolve, 200));
+    })
+  );
+
+  await Promise.allSettled(tasks);
+  console.log(`[Metadata] Bulk hydration complete for ${games.length} games`);
 }

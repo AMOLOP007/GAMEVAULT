@@ -18,6 +18,28 @@ export default async function syncRoutes(fastify: FastifyInstance) {
     });
   });
 
+  // POST /api/sync/epic-id - Save the user's Epic Account ID
+  fastify.post('/epic-id', async (request: FastifyRequest) => {
+    const { epicId } = request.body as { epicId: string };
+    const userId = (request.user as any).sub;
+    if (!epicId) throw new Error('Epic Account ID is required');
+    return await (prisma as any).user.update({
+      where: { id: userId },
+      data: { epicId }
+    });
+  });
+
+  // POST /api/sync/gog-id - Save the user's GOG ID
+  fastify.post('/gog-id', async (request: FastifyRequest) => {
+    const { gogId } = request.body as { gogId: string };
+    const userId = (request.user as any).sub;
+    if (!gogId) throw new Error('GOG ID is required');
+    return await (prisma as any).user.update({
+      where: { id: userId },
+      data: { gogId }
+    });
+  });
+
   // POST /api/sync/steam (Requires API Key)
   fastify.post('/steam', async (request: FastifyRequest) => {
     const { steamId, apiKey: providedKey } = request.body as { steamId: string; apiKey?: string };
@@ -139,25 +161,32 @@ export default async function syncRoutes(fastify: FastifyInstance) {
     const userId = (request.user as any).sub;
     const session = request.body as any;
 
-    return await prisma.playSession.upsert({
-      where: { id: session.id },
-      create: {
-        ...session,
-        userId,
-        startTime: new Date(session.startTime),
-        endTime: session.endTime ? new Date(session.endTime) : null,
-        lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
-        synced: true
-      },
-      update: {
-        ...session,
-        userId,
-        startTime: new Date(session.startTime),
-        endTime: session.endTime ? new Date(session.endTime) : null,
-        lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
-        synced: true
+    try {
+      return await prisma.playSession.upsert({
+        where: { id: session.id },
+        create: {
+          ...session,
+          userId,
+          startTime: new Date(session.startTime),
+          endTime: session.endTime ? new Date(session.endTime) : null,
+          lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
+          synced: true
+        },
+        update: {
+          ...session,
+          userId,
+          startTime: new Date(session.startTime),
+          endTime: session.endTime ? new Date(session.endTime) : null,
+          lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
+          synced: true
+        }
+      });
+    } catch (err: any) {
+      if (err.code === 'P2003') {
+        return { success: false, error: 'Game not found on server. Please sync the game first.' };
       }
-    });
+      throw err;
+    }
   });
 
   // POST /api/sync/achievements - Sync local achievements
@@ -184,5 +213,22 @@ export default async function syncRoutes(fastify: FastifyInstance) {
         earnedAt: achievement.earnedAt ? new Date(achievement.earnedAt) : null
       }
     });
+  });
+
+  // POST /api/sync/epic - Trigger Epic Games Sync
+  fastify.post('/epic', async (request: FastifyRequest) => {
+    const userId = (request.user as any).sub;
+    const { epicId, accessToken } = request.body as { epicId?: string; accessToken?: string };
+    
+    let targetEpicId = epicId;
+    if (!targetEpicId) {
+      const user = await (prisma as any).user.findUnique({ where: { id: userId } });
+      targetEpicId = user?.epicId;
+    }
+
+    if (!targetEpicId) throw new Error('Epic Account ID is required');
+
+    const { EpicSyncService } = await import('../services/epicSyncService.js');
+    return await EpicSyncService.syncEpicData(userId, targetEpicId, accessToken);
   });
 }

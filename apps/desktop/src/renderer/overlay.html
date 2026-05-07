@@ -3,203 +3,316 @@
 <head>
   <style>
     /* PERF: No CDN font loading during gaming — use local system fonts */
-    /* Outfit-like stack: Segoe UI (Windows), then common sans-serif fallbacks */
+    /* Segoe UI (Windows 10/11), then system-ui fallbacks */
 
     :root {
-      --gold: #FFD700;
-      --silver: #C0C0C0;
-      --bronze: #CD7F32;
-      --platinum: #E5E4E2;
-      --accent: var(--gold);
+      --gold:      #F5C518;
+      --silver:    #C0C0C0;
+      --bronze:    #CD7F32;
+      --platinum:  #E5E4E2;
+      --steam:     #1b9bed;
+      --epic:      #2e7ed1;
+      --accent:    var(--gold);
+      --accent-rgb: 245, 197, 24;
     }
+
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
       overflow: hidden;
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      /* Card: 380px wide × 100px tall (enough for title + desc + meta row) */
       height: 110px;
       width: 400px;
       display: flex;
       align-items: flex-start;
       justify-content: flex-end;
-      padding: 10px;
-      box-sizing: border-box;
+      padding: 8px;
     }
 
+    /* ── Card Container ──────────────────────────────────────────────────── */
     .trophy-container {
       position: relative;
-      width: 360px;
-      height: 85px;
-      perspective: 1000px;
+      width: 375px;
+      height: 96px;
+      perspective: 1200px;
     }
 
     .trophy-card {
       width: 100%;
       height: 100%;
-      background: rgba(10, 10, 15, 0.85);
-      backdrop-filter: blur(16px);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(8, 8, 18, 0.92);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
       display: flex;
       align-items: center;
-      padding: 0 18px;
-      box-sizing: border-box;
-      transform: translateX(120%) rotateY(20deg);
-      transition: all 0.7s cubic-bezier(0.19, 1, 0.22, 1);
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 
-                  0 0 20px rgba(var(--accent-rgb), 0.15);
+      padding: 0 14px;
+      transform: translateX(115%) rotateY(18deg);
+      transition: transform 0.65s cubic-bezier(0.19, 1, 0.22, 1),
+                  opacity  0.65s cubic-bezier(0.19, 1, 0.22, 1);
+      opacity: 0;
+      box-shadow:
+        0 16px 40px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 0 24px rgba(var(--accent-rgb), 0.12);
       overflow: hidden;
+      position: relative;
     }
 
     .trophy-card.show {
       transform: translateX(0) rotateY(0deg);
+      opacity: 1;
     }
 
-    /* Glow Pulse */
-    .trophy-card::after {
+    /* Animated top-edge glow bar */
+    .trophy-card::before {
       content: '';
       position: absolute;
-      inset: -1px;
-      border-radius: 16px;
-      padding: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      mask-composite: xor;
-      -webkit-mask-composite: destination-out;
-      animation: border-pulse 3s infinite;
-    }
-
-    @keyframes border-pulse {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 0.8; }
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(var(--accent-rgb), 0.7) 30%,
+        rgba(var(--accent-rgb), 1)   50%,
+        rgba(var(--accent-rgb), 0.7) 70%,
+        transparent 100%
+      );
+      border-radius: 14px 14px 0 0;
     }
 
     /* Shimmer Sweep */
     .shimmer {
       position: absolute;
-      top: 0;
-      left: -100%;
-      width: 50%;
+      top: 0; left: -100%;
+      width: 40%;
       height: 100%;
       background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 255, 255, 0.1),
-        rgba(255, 255, 255, 0.4),
-        rgba(255, 255, 255, 0.1),
+        rgba(255,255,255,0.06),
+        rgba(255,255,255,0.18),
+        rgba(255,255,255,0.06),
         transparent
       );
       transform: skewX(-20deg);
       pointer-events: none;
+      z-index: 10;
     }
-
     .shimmer.sweep {
-      animation: sweep 1.5s ease-in-out forwards;
+      animation: shimmer-sweep 1.4s ease-in-out forwards;
     }
-
-    @keyframes sweep {
-      0% { left: -100%; }
+    @keyframes shimmer-sweep {
+      0%   { left: -100%; }
       100% { left: 200%; }
     }
 
+    /* ── Icon ──────────────────────────────────────────────────────────────── */
     .icon-wrapper {
-      width: 52px;
-      height: 52px;
-      background: rgba(255, 255, 255, 0.05);
+      width: 56px;
+      height: 56px;
       border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(var(--accent-rgb), 0.25);
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
       flex-shrink: 0;
-      transform: scale(0.8);
-      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+      transform: scale(0.7);
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s;
+      overflow: hidden;
     }
-
     .trophy-card.show .icon-wrapper {
       transform: scale(1);
     }
 
-    .trophy-icon {
-      width: 32px;
-      height: 32px;
-      filter: drop-shadow(0 0 8px var(--accent));
+    .icon-img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.8));
       animation: icon-float 3s ease-in-out infinite;
     }
-
+    .icon-svg {
+      width: 34px;
+      height: 34px;
+      fill: var(--accent);
+      filter: drop-shadow(0 0 8px rgba(var(--accent-rgb), 0.8));
+      animation: icon-float 3s ease-in-out infinite;
+    }
     @keyframes icon-float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-3px); }
+      0%, 100% { transform: translateY(0px);   }
+      50%       { transform: translateY(-3px); }
     }
 
+    /* Source badge (Steam / Epic / GameVault) */
+    .source-badge {
+      position: absolute;
+      bottom: 3px; right: 3px;
+      width: 14px; height: 14px;
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 8px;
+      font-weight: 900;
+      color: white;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    /* ── Text Content ──────────────────────────────────────────────────────── */
     .content {
-      margin-left: 16px;
+      margin-left: 12px;
       flex: 1;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
     }
 
-    .game-name {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--accent);
+    /* Top row: platform label + "Achievement Unlocked!" */
+    .label-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .platform-chip {
+      font-size: 9px;
+      font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 1.5px;
-      margin-bottom: 2px;
-      opacity: 0.8;
+      letter-spacing: 0.8px;
+      color: var(--accent);
+      opacity: 0.85;
+      white-space: nowrap;
     }
-
-    .trophy-title {
-      font-size: 16px;
+    .unlocked-label {
+      font-size: 9px;
       font-weight: 600;
-      color: white;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    /* Achievement name */
+    .trophy-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-bottom: 1px;
+      line-height: 1.15;
+      letter-spacing: -0.3px;
     }
 
+    /* Description */
     .trophy-desc {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+      color: rgba(255,255,255,0.48);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height: 1.2;
     }
 
-    /* Particle System */
+    /* Meta row: global% + unlock time */
+    .meta-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .global-pct {
+      font-size: 9px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.35);
+      white-space: nowrap;
+    }
+    .global-pct span {
+      color: rgba(var(--accent-rgb), 0.75);
+    }
+    .unlock-time {
+      font-size: 9px;
+      color: rgba(255,255,255,0.25);
+      white-space: nowrap;
+    }
+
+    /* ── Progress Bar (for globalPercent) ─────────────────────────────────── */
+    .pct-bar-wrapper {
+      flex: 1;
+      height: 2px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      overflow: hidden;
+      max-width: 80px;
+    }
+    .pct-bar {
+      height: 100%;
+      background: linear-gradient(90deg, rgba(var(--accent-rgb),0.5), rgba(var(--accent-rgb),0.85));
+      border-radius: 2px;
+      width: 0%;
+      transition: width 1.2s ease 0.8s;
+    }
+    .pct-bar.animate { width: var(--target-width); }
+
+    /* ── Particles ─────────────────────────────────────────────────────────── */
     .particle {
       position: absolute;
       pointer-events: none;
       background: var(--accent);
       border-radius: 50%;
-      z-index: 10;
+      z-index: 20;
     }
-
     @keyframes particle-fade {
-      0% { transform: translate(0, 0) scale(1); opacity: 1; }
+      0%   { transform: translate(0, 0) scale(1); opacity: 1; }
       100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
     }
 
-    /* First Launch Variant */
+    /* ── Variant: First Launch ─────────────────────────────────────────────── */
     .variant-celebration {
-      border: 1px solid rgba(255, 215, 0, 0.4);
-      background: linear-gradient(135deg, rgba(20, 20, 30, 0.9), rgba(40, 30, 10, 0.9));
+      border: 1px solid rgba(255, 215, 0, 0.35);
+      background: linear-gradient(135deg, rgba(18, 18, 28, 0.94), rgba(38, 28, 8, 0.94));
     }
 
-    /* Grand Master Variant */
+    /* ── Variant: Platinum / Grand Master ─────────────────────────────────── */
     .variant-grand-master {
-      border: 1px solid rgba(255, 255, 255, 0.6);
-      background: linear-gradient(135deg, rgba(10, 20, 40, 0.95), rgba(40, 10, 40, 0.95), rgba(10, 40, 20, 0.95));
+      border: 1px solid rgba(255,255,255,0.4);
+      background: linear-gradient(135deg,
+        rgba(10, 18, 40, 0.96) 0%,
+        rgba(40, 10, 40, 0.96) 50%,
+        rgba(10, 40, 22, 0.96) 100%
+      );
       background-size: 400% 400%;
       animation: rainbow-bg 8s ease infinite;
-      box-shadow: 0 0 40px rgba(255, 255, 255, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.1);
+      box-shadow: 0 0 40px rgba(255,255,255,0.2), inset 0 0 20px rgba(255,255,255,0.05);
+    }
+    @keyframes rainbow-bg {
+      0%,100% { background-position: 0% 50%; }
+      50%     { background-position: 100% 50%; }
     }
 
-    @keyframes rainbow-bg {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
+    /* ── Rare Achievement (<5% players) pulse border ──────────────────────── */
+    .variant-rare::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 14px;
+      padding: 1px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(var(--accent-rgb), 0.5),
+        transparent
+      );
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: xor;
+      -webkit-mask-composite: destination-out;
+      animation: rare-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes rare-pulse {
+      0%,100% { opacity: 0.4; }
+      50%     { opacity: 1; }
     }
   </style>
 </head>
@@ -207,114 +320,224 @@
   <div class="trophy-container">
     <div id="card" class="trophy-card">
       <div class="shimmer" id="shimmer"></div>
+
+      <!-- Icon -->
       <div class="icon-wrapper" id="icon-box">
-        <svg class="trophy-icon" id="svg-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M18,2H6V4H18V2M18,7V9C18,12.31 15.31,15 12,15C8.69,15 6,12.31 6,9V7C4.89,7 4,7.89 4,9V10C4,11.11 4.89,12 6,12V13.88C6,15.39 7.05,16.65 8.47,16.94L7,20H5V22H19V20H17L15.53,16.94C16.95,16.65 18,15.39 18,13.88V12C19.11,12 20,11.11 20,10V9C20,7.89 19.11,7 18,7M12,13C14.21,13 16,11.21 16,9V4H8V9C8,11.21 9.79,13 12,13Z" />
+        <!-- Replaced dynamically by JS -->
+        <svg class="icon-svg" id="svg-icon" viewBox="0 0 24 24">
+          <path d="M18,2H6V4H18V2M18,7V9C18,12.31 15.31,15 12,15C8.69,15 6,12.31 6,9V7C4.89,7 4,7.89 4,9V10C4,11.11 4.89,12 6,12V13.88C6,15.39 7.05,16.65 8.47,16.94L7,20H5V22H19V20H17L15.53,16.94C16.95,16.65 18,15.39 18,13.88V12C19.11,12 20,11.11 20,10V9C20,7.89 19.11,7 18,7M12,13C14.21,13 16,11.21 16,9V4H8V9C8,11.21 9.79,13 12,13Z"/>
         </svg>
+        <div class="source-badge" id="source-badge">GV</div>
       </div>
+
+      <!-- Text -->
       <div class="content">
-        <div class="game-name" id="game-name">Cyberpunk 2077</div>
+        <div class="label-row">
+          <span class="platform-chip" id="platform-chip">GameVault</span>
+          <span class="unlocked-label">Achievement Unlocked!</span>
+        </div>
+
         <div class="trophy-title" id="title">Night City Legend</div>
         <div class="trophy-desc" id="desc">Complete all gigs in Watson.</div>
+
+        <div class="meta-row">
+          <div class="global-pct" id="global-pct" style="display:none">
+            <span id="pct-value">29.8%</span> of players
+          </div>
+          <div class="pct-bar-wrapper" id="pct-bar-wrap" style="display:none">
+            <div class="pct-bar" id="pct-bar"></div>
+          </div>
+          <div class="unlock-time" id="unlock-time"></div>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    const card = document.getElementById('card');
-    const shimmer = document.getElementById('shimmer');
-    const titleEl = document.getElementById('title');
-    const descEl = document.getElementById('desc');
-    const gameEl = document.getElementById('game-name');
-    const iconEl = document.getElementById('svg-icon');
+    'use strict';
+
+    const card       = document.getElementById('card');
+    const shimmer    = document.getElementById('shimmer');
+    const titleEl    = document.getElementById('title');
+    const descEl     = document.getElementById('desc');
+    const chipEl     = document.getElementById('platform-chip');
+    const badgeEl    = document.getElementById('source-badge');
+    const iconBox    = document.getElementById('icon-box');
+    const svgIcon    = document.getElementById('svg-icon');
+    const globalPct  = document.getElementById('global-pct');
+    const pctValue   = document.getElementById('pct-value');
+    const pctBarWrap = document.getElementById('pct-bar-wrap');
+    const pctBar     = document.getElementById('pct-bar');
+    const timeEl     = document.getElementById('unlock-time');
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function setAccent(hexColor) {
+      document.documentElement.style.setProperty('--accent', hexColor);
+      const rgb = hexToRgb(hexColor);
+      document.documentElement.style.setProperty('--accent-rgb', `${rgb.r},${rgb.g},${rgb.b}`);
+    }
+
+    function getTrophyColor(type, source) {
+      // Source-based defaults
+      if (source === 'steam')     return '#1b9bed';
+      if (source === 'epic')      return '#2e7ed1';
+      if (source === 'goldberg' || source === 'codex' ||
+          source === 'smartsteam'|| source === 'ali213' ||
+          source === 'creamapi' || source === 'generic') {
+        return '#F5C518'; // Gold — cracked game achievement
+      }
+      switch (type?.toLowerCase()) {
+        case 'gold':        return '#F5C518';
+        case 'silver':      return '#C0C0C0';
+        case 'bronze':      return '#CD7F32';
+        case 'platinum':    return '#E5E4E2';
+        case 'grand_master':return '#FFFFFF';
+        case 'first_launch':return '#FFD700';
+        default:            return '#F5C518';
+      }
+    }
+
+    function getPlatformLabel(source, type) {
+      switch (source) {
+        case 'steam':       return '🔵 Steam';
+        case 'epic':        return '🟣 Epic Games';
+        case 'goldberg':    return '⚡ GameVault';
+        case 'codex':       return '⚡ GameVault';
+        case 'smartsteam':  return '⚡ GameVault';
+        case 'ali213':      return '⚡ GameVault';
+        case 'creamapi':    return '⚡ GameVault';
+        case 'generic':     return '⚡ GameVault';
+        case 'first_launch':return '🚀 GameVault';
+        default:            return '🏆 GameVault';
+      }
+    }
+
+    function getSourceBadge(source) {
+      switch (source) {
+        case 'steam':    return 'ST';
+        case 'epic':     return 'EG';
+        default:         return 'GV';
+      }
+    }
+
+    function formatTime(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit'
+      });
+    }
+
+    function hexToRgb(hex) {
+      const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return r
+        ? { r: parseInt(r[1],16), g: parseInt(r[2],16), b: parseInt(r[3],16) }
+        : { r: 245, g: 197, b: 24 };
+    }
 
     function createParticles() {
-      const box = document.getElementById('icon-box');
-      const rect = box.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      
+      const rect = iconBox.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
       for (let i = 0; i < 20; i++) {
         const p = document.createElement('div');
         p.className = 'particle';
         const size = Math.random() * 4 + 2;
-        p.style.width = size + 'px';
-        p.style.height = size + 'px';
-        
-        const angle = Math.random() * Math.PI * 2;
+        p.style.cssText = `width:${size}px;height:${size}px;`;
+        const angle    = Math.random() * Math.PI * 2;
         const velocity = 40 + Math.random() * 60;
-        const tx = Math.cos(angle) * velocity;
-        const ty = Math.sin(angle) * velocity;
-        
-        p.style.setProperty('--tx', tx + 'px');
-        p.style.setProperty('--ty', ty + 'px');
-        p.style.left = centerX + 'px';
-        p.style.top = centerY + 'px';
+        p.style.setProperty('--tx', (Math.cos(angle) * velocity) + 'px');
+        p.style.setProperty('--ty', (Math.sin(angle) * velocity) + 'px');
+        p.style.left = cx + 'px';
+        p.style.top  = cy + 'px';
         p.style.animation = `particle-fade ${0.6 + Math.random() * 0.4}s ease-out forwards`;
-        
-        box.appendChild(p);
-        setTimeout(() => p.remove(), 1000);
+        iconBox.appendChild(p);
+        setTimeout(() => p.remove(), 1200);
       }
     }
 
-    window.gameVault?.onTrophyShow((data) => {
-      // Reset
-      card.classList.remove('show');
-      card.classList.remove('variant-celebration');
-      card.classList.remove('variant-grand-master');
-      shimmer.classList.remove('sweep');
-      
-      // Set Data
-      titleEl.innerText = data.title;
-      descEl.innerText = data.message || data.description || '';
-      gameEl.innerText = data.gameTitle || '';
-      
-      const color = getTrophyColor(data.type);
-      document.documentElement.style.setProperty('--accent', color);
-      
-      // Convert hex to RGB for the box-shadow
-      const rgb = hexToRgb(color);
-      document.documentElement.style.setProperty('--accent-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+    // ── Main trophy handler ───────────────────────────────────────────────────
 
-      if (data.type === 'first_launch') {
-        card.classList.add('variant-celebration');
-      } else if (data.type === 'grand_master' || data.type === 'badge' && data.title.includes('Grand Master')) {
-        card.classList.add('variant-grand-master');
+    window.gameVault?.onTrophyShow((data) => {
+      // Reset state
+      card.classList.remove('show', 'variant-celebration', 'variant-grand-master', 'variant-rare');
+      shimmer.classList.remove('sweep');
+      pctBar.classList.remove('animate');
+
+      // ── Accent color
+      const color = getTrophyColor(data.type, data.source);
+      setAccent(color);
+
+      // ── Platform chip
+      chipEl.textContent = data.gameTitle
+        ? `${getPlatformLabel(data.source, data.type)} — ${data.gameTitle}`
+        : getPlatformLabel(data.source, data.type);
+
+      // ── Source badge
+      badgeEl.textContent = getSourceBadge(data.source);
+
+      // ── Icon
+      // Remove old <img> if any
+      const oldImg = iconBox.querySelector('img');
+      if (oldImg) oldImg.remove();
+
+      if (data.iconUrl && data.iconUrl.startsWith('http')) {
+        // Use real achievement icon from Steam/Epic
+        const img = document.createElement('img');
+        img.className = 'icon-img';
+        img.src = data.iconUrl;
+        img.alt = '';
+        img.onerror = () => { img.remove(); svgIcon.style.display = ''; };
+        svgIcon.style.display = 'none';
+        iconBox.insertBefore(img, iconBox.firstChild);
+      } else {
+        svgIcon.style.display = '';
       }
 
-      // Show
-      setTimeout(() => {
+      // ── Text
+      titleEl.textContent = data.title || 'Achievement Unlocked';
+      descEl.textContent  = data.description || data.message || '';
+
+      // ── Global % (e.g. "29.8% of players have this achievement")
+      const pct = data.globalPercent;
+      if (pct != null && pct >= 0) {
+        pctValue.textContent = pct.toFixed(1) + '%';
+        globalPct.style.display  = '';
+        pctBarWrap.style.display = '';
+        pctBar.style.setProperty('--target-width', Math.min(pct, 100) + '%');
+        setTimeout(() => pctBar.classList.add('animate'), 50);
+      } else {
+        globalPct.style.display  = 'none';
+        pctBarWrap.style.display = 'none';
+      }
+
+      // ── Unlock time
+      const ts = data.earnedAt || data.unlockTime;
+      timeEl.textContent = ts ? 'Unlocked ' + formatTime(ts) : '';
+
+      // ── Variants
+      if (data.type === 'first_launch') {
+        card.classList.add('variant-celebration');
+      } else if (data.type === 'grand_master' || data.type === 'platinum') {
+        card.classList.add('variant-grand-master');
+      }
+      // Rare achievement (<5% players) gets animated border
+      if (pct != null && pct < 5) {
+        card.classList.add('variant-rare');
+      }
+
+      // ── Animate in
+      requestAnimationFrame(() => {
         card.classList.add('show');
         setTimeout(() => {
           shimmer.classList.add('sweep');
           createParticles();
-        }, 500);
-      }, 50);
-
-      // Auto-hide is handled by main process, but we can also do it here if needed
+        }, 550);
+      });
     });
-
-    function getTrophyColor(type) {
-      switch(type?.toLowerCase()) {
-        case 'gold': return '#F5C518';
-        case 'silver': return '#C0C0C0';
-        case 'bronze': return '#CD7F32';
-        case 'platinum': return '#E5E4E2';
-        case 'grand_master': return '#FFFFFF';
-        case 'first_launch': return '#FFD700';
-        default: return '#F5C518';
-      }
-    }
-
-    function hexToRgb(hex) {
-      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-      } : { r: 245, g: 197, b: 24 };
-    }
   </script>
 </body>
 </html>
-

@@ -1,16 +1,8 @@
+import './lib/env.js';
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Initialize environment variables BEFORE anything else (like Prisma)
-dotenv.config({ path: path.resolve(__dirname, '../../../.env.local') });
 
 import prisma from './lib/prisma.js';
 
@@ -20,7 +12,7 @@ const app = Fastify({
 });
 
 // Diagnostic logging
-console.log('[API] Using Database URL:', process.env.DATABASE_LOCAL_URL || 'NOT SET');
+console.log('[API] Database URL (Configured):', process.env.DATABASE_URL ? 'POSTGRES (REMOTE)' : (process.env.DATABASE_LOCAL_URL ? 'SQLITE (LOCAL)' : 'NOT SET'));
 
 app.register(fastifyCors, { 
   origin: true, 

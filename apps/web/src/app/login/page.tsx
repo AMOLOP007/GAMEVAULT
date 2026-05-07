@@ -47,10 +47,7 @@ function LoginContent() {
       if (isElectron && (window as any).gameVault) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          await (window as any).gameVault.setToken({ 
-            token: session.access_token, 
-            userId: session.user.id 
-          });
+          await (window as any).gameVault.setToken(session.access_token);
           return;
         }
       }

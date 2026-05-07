@@ -1,9 +1,17 @@
 import { PrismaClient } from 'prisma-client-api/index.js';
 
+const dbUrl = process.env.DATABASE_URL || process.env.DATABASE_LOCAL_URL;
+
+if (!dbUrl) {
+  console.error('❌ [Prisma] DATABASE_URL or DATABASE_LOCAL_URL is not defined in environment!');
+} else {
+  console.log(`📡 [Prisma] Initializing client with ${dbUrl.split(':')[0]} datasource...`);
+}
+
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DATABASE_LOCAL_URL || process.env.DATABASE_URL
+      url: dbUrl
     }
   }
 });

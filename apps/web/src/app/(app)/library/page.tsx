@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
 import GameCard from '@/components/library/GameCard';
@@ -63,30 +63,42 @@ export default function LibraryPage() {
         filters.wouldReplay = true;
       } else if (statusFilter !== 'ALL') {
         filters.status = statusFilter;
+      } else if (statusFilter === 'ALL') {
+        filters.excludeStatus = 'COMPLETED';
       }
       
       if (search) filters.search = search;
       const data = await api.getGames(filters);
-      console.log('LOADED GAMES:', data);
       setGames(data);
     } catch (err) {
-      console.error(err);
+      console.error('[Library] Failed to load games:', err);
     } finally {
       setLoading(false);
     }
   }, [statusFilter, search]);
 
+  // Track whether this is the initial mount to avoid double-fetching.
+  // The debounced effect below fires on every loadGames change (i.e. filter/search).
+  // Without this guard, initial mount would trigger two simultaneous fetches.
+  const isMounted = useRef(false);
+
   useEffect(() => {
-    loadGames();
-    
+    // Register library update listener (desktop bridge)
     if ((window as any).gameVault) {
       (window as any).gameVault.onLibraryUpdated(() => {
         loadGames();
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    // Skip the debounce on the very first render — fire immediately instead
+    if (!isMounted.current) {
+      isMounted.current = true;
+      loadGames();
+      return;
+    }
     const debounce = setTimeout(loadGames, 300);
     return () => clearTimeout(debounce);
   }, [loadGames]);

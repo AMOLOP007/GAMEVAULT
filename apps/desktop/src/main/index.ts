@@ -8,6 +8,7 @@ import prisma from './db.js';
 import { GameDetector } from './detectors/GameDetector.js';
 import { GameTracker } from './tracker.js';
 import { AchievementEngine } from './achievements/AchievementEngine.js';
+import { CrackedAchievementEngine } from './achievements/CrackedAchievementEngine.js';
 import { TrophyOverlay } from './overlay/TrophyOverlay.js';
 import { PsListDetector } from './detectors/PsListDetector.js';
 import { SyncService } from './syncService.js';
@@ -27,6 +28,8 @@ const isDev = !app.isPackaged;
 const detector = new PsListDetector();
 const gameDetector = new GameDetector(process.env.RAWG_KEY || '');
 const achievementEngine = new AchievementEngine();
+// Cracked Achievement Engine — watches emulator save files in real-time
+const crackedAchEngine = new CrackedAchievementEngine();
 let overlay: TrophyOverlay | null = null;
 let tracker: GameTracker | null = null;
 const launcher = new GameLauncher();
@@ -40,6 +43,8 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false,
+    backgroundColor: '#0a0a0f',
     icon: path.join(__dirname, '../../assets/icon.png'),
     webPreferences: {
       nodeIntegration: false,
@@ -50,6 +55,10 @@ function createMainWindow() {
       webgl: false,
       enableWebSQL: false,
     }
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
   });
 
   // SECURITY: Content Security Policy — block inline scripts, restrict sources
@@ -224,6 +233,24 @@ function setupTracker() {
     if (badgeService) {
       await badgeService.checkBadges(userId, { gameId: data.gameId });
     }
+
+    // ── Cracked Achievement Engine: start watching emulator files ──────────
+    try {
+      const game = await prisma.game.findUnique({ where: { id: data.gameId } });
+      if (game?.steamAppId && game?.exePath) {
+        const watching = await crackedAchEngine.watch(
+          game.id,
+          game.title,
+          game.steamAppId,
+          game.exePath
+        );
+        if (watching) {
+          log.info(`[Main] Cracked achievement watcher active for ${game.title}`);
+        }
+      }
+    } catch (err: any) {
+      log.warn(`[Main] Cracked achievement watcher failed to start: ${err.message}`);
+    }
   });
 
   tracker.on('game:heartbeat', async (data) => {
@@ -241,6 +268,9 @@ function setupTracker() {
     const userId = store.get('userId') as string;
     await achievementEngine.checkAllAchievements(userId, data.gameId);
     
+    // ── Stop cracked achievement watcher ──────────────────────────────────
+    crackedAchEngine.unwatch(data.gameId);
+
     // Sync Steam trophies if it's a steam game
     const game = await prisma.game.findUnique({ where: { id: data.gameId } });
     if (game?.steamAppId) {
@@ -294,13 +324,103 @@ function setupTracker() {
       overlay?.showTrophy({
         title: data.title,
         type: 'gold',
-        iconUrl: data.iconUrl
+        iconUrl: data.iconUrl,
+        description: data.description,
+        source: data.source,
+      });
+    }
+  });
+
+  // ── Cracked Achievement Engine: real-time emulator file watcher ─────────────
+  // Fires when Goldberg / CODEX / SmartSteamEmu / ALI213 / CreamAPI saves a new unlock
+  crackedAchEngine.on('achievement:unlocked', async (unlocked: any) => {
+    const userId = store.get('userId') as string;
+    if (!userId) return;
+
+    log.info(`[Main] Cracked ach unlocked: "${unlocked.name}" in ${unlocked.gameTitle} (${unlocked.source})`);
+
+    // 1. Show overlay — ALWAYS show for cracked achievements, these are the real ones
+    overlay?.showTrophy({
+      title:         unlocked.name,
+      description:   unlocked.description,
+      gameTitle:     unlocked.gameTitle,
+      type:          'gold',
+      source:        unlocked.source,          // 'goldberg' | 'codex' | etc.
+      iconUrl:       unlocked.iconUrl,
+      globalPercent: unlocked.globalPercent,   // e.g. 29.8
+      earnedAt:      unlocked.earnedAt?.toISOString(),
+    });
+
+    // 2. Notify renderer UI (for achievement feed)
+    mainWindow?.webContents.send('achievement:unlocked', {
+      gameId:        unlocked.gameId,
+      title:         unlocked.name,
+      description:   unlocked.description,
+      iconUrl:       unlocked.iconUrl,
+      globalPercent: unlocked.globalPercent,
+      earnedAt:      unlocked.earnedAt?.toISOString(),
+      source:        unlocked.source,
+    });
+
+    // 3. Persist to local SQLite DB
+    try {
+      await (prisma as any).gameAchievement.upsert({
+        where: {
+          userId_gameId_key: {
+            userId,
+            gameId: unlocked.gameId,
+            key:    `${unlocked.source}_${unlocked.key}`,
+          }
+        },
+        update: {
+          isEarned:  true,
+          earnedAt:  unlocked.earnedAt || new Date(),
+          name:      unlocked.name,
+        },
+        create: {
+          userId,
+          gameId:   unlocked.gameId,
+          key:      `${unlocked.source}_${unlocked.key}`,
+          name:     unlocked.name,
+          description: unlocked.description || '',
+          iconUrl:  unlocked.iconUrl,
+          isEarned: true,
+          earnedAt: unlocked.earnedAt || new Date(),
+          source:   unlocked.source,
+        }
+      });
+    } catch (err: any) {
+      log.error(`[Main] Failed to save cracked achievement: ${err.message}`);
+    }
+
+    // 4. Sync to cloud API (fire-and-forget)
+    const token = store.get('token');
+    if (token) {
+      axios.post(`${API_BASE_URL}/api/sync/achievements`, {
+        gameId:    unlocked.gameId,
+        key:       `${unlocked.source}_${unlocked.key}`,
+        name:      unlocked.name,
+        description: unlocked.description || '',
+        iconUrl:   unlocked.iconUrl,
+        isEarned:  true,
+        earnedAt:  unlocked.earnedAt?.toISOString(),
+        source:    unlocked.source,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => log.warn(`[Main] Cloud ach sync failed: ${err.message}`));
+    }
+
+    // 5. Track challenge progress
+    if (challengeService) {
+      await challengeService.trackProgress(userId, {
+        type: 'ACHIEVEMENTS', value: 1, gameId: unlocked.gameId
       });
     }
   });
 
   tracker.start();
 }
+
 
 // ── IPC Handlers ──────────────────────────────
 ipcMain.handle('auth:getToken', () => store.get('token'));
@@ -431,7 +551,11 @@ async function handleLaunch(gameId: string, options?: { forceExe?: boolean }) {
 
     // Proactive tracking starts NOW
     if (tracker) {
-      await tracker.createPendingSession(game.id);
+      if (result.processHandle && result.processHandle.pid) {
+        await tracker.attachProcess(game.id, result.processHandle.pid);
+      } else {
+        tracker.expectGame(game.id, game.processName);
+      }
     }
 
     // Check if this is the first launch
@@ -700,12 +824,24 @@ app.whenReady().then(() => {
   // Auto-launch main window
   createMainWindow();
 
-  // PERF: Connectivity Monitor — pauses during Gaming Mode to save CPU/network
-  setInterval(async () => {
-    if (isGamingMode) return; // Skip during active gaming sessions
+  // PERF: Adaptive Connectivity Monitor
+  // - Normal: checks every 30s
+  // - Gaming Mode: backs off to 5 minutes (no CPU wasted during gameplay)
+  // - Offline: backs off to 2 minutes before retrying
+  // Using recursive setTimeout instead of setInterval avoids stacking callbacks
+  // if health check takes longer than the interval.
+  let connectivityTimer: NodeJS.Timeout | null = null;
+  
+  async function runConnectivityCheck() {
+    // Don't bother during active gaming — save CPU
+    if (isGamingMode) {
+      connectivityTimer = setTimeout(runConnectivityCheck, 5 * 60 * 1000); // 5 min backoff
+      return;
+    }
+
     let online = false;
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/health`);
+      const res = await axios.get(`${API_BASE_URL}/api/health`, { timeout: 5000 });
       online = res.status === 200;
     } catch {}
 
@@ -715,7 +851,14 @@ app.whenReady().then(() => {
       pendingWrites: 0,
       rawgUsagePercent: 0,
     });
-  }, 30000);
+
+    // Offline → slower retry (2min). Online → normal 30s.
+    const nextInterval = online ? 30_000 : 2 * 60 * 1000;
+    connectivityTimer = setTimeout(runConnectivityCheck, nextInterval);
+  }
+
+  // Start the first check after a 10s delay to avoid hitting API during startup
+  connectivityTimer = setTimeout(runConnectivityCheck, 10_000);
 });
 
 app.on('window-all-closed', () => {

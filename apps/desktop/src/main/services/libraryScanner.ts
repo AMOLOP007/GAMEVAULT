@@ -160,17 +160,28 @@ export async function discoverEpicGames(): Promise<DiscoveredGame[]> {
       try {
         const manifest = JSON.parse(fs.readFileSync(itemPath, 'utf8'));
         if (!manifest.bIsApplication) continue; // skip DLC
+
         const name = manifest.DisplayName;
         const installPath = manifest.InstallLocation;
-        const epicId = manifest.CatalogItemId;
         const launchExe = manifest.LaunchExecutable;
+
+        // ── Epic Manifest Field Guide ─────────────────────────────────────────
+        // AppName          → unique installable slug used by the launcher protocol
+        //                    com.epicgames.launcher://apps/{AppName}?action=launch
+        // CatalogNamespace → sandbox/namespace ID used by the Achievement GraphQL API
+        // CatalogItemId    → catalog item (NOT used for launch or achievement sync)
+        // ─────────────────────────────────────────────────────────────────────
+        const appName = manifest.AppName || manifest.CatalogItemId; // AppName is the correct launch key
+        const sandboxId = manifest.CatalogNamespace || manifest.MainGameCatalogNamespace || null;
 
         discovered.push({
           name,
           exePath: path.join(installPath, launchExe),
           source: 'epic',
-          launchUri: `com.epicgames.launcher://apps/${epicId}?action=launch&silent=true`,
-          epicAppId: epicId,
+          // Use AppName for the launcher URI — this is what Epic Launcher actually understands
+          launchUri: `com.epicgames.launcher://apps/${appName}?action=launch&silent=true`,
+          // Store sandboxId as epicAppId — this is what the Achievement GraphQL API uses
+          epicAppId: sandboxId || appName,
           installPath,
           platform: 'Epic',
         });
@@ -303,23 +314,98 @@ export async function discoverFromStartMenu(): Promise<DiscoveredGame[]> {
 
 // ── SOURCE 5: Common Game Folder Scan ─────────────────────────────────────────
 
-export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
-  const commonFolders = [
-    'C:\\Games',
-    'C:\\Program Files\\Games',
-    'C:\\Program Files (x86)\\Games',
-    'D:\\Games',
-    'D:\\',
-    'E:\\Games',
-    'E:\\',
-  ].filter(f => {
-    try { fs.accessSync(f); return true; } catch { return false; }
-  });
+import store from '../store.js';
 
+export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
   const results: DiscoveredGame[] = [];
-  for (const folder of commonFolders) {
-    // Assuming folderScanner.ts exists in ../
+  const scannedPaths = new Set<string>();
+  
+  // 1. Get all drives dynamically
+  let drives: string[] = ['C:'];
+  try {
+    const { stdout } = await execAsync('wmic logicaldisk get name');
+    drives = stdout.match(/[A-Z]:/g) || ['C:'];
+  } catch {}
+
+  // 2. State-of-the-art highly optimized global deep scan
+  // We use fast-glob to aggressively seek out emulator DLLs and Engine binaries
+  // This takes milliseconds instead of the hours it would take to size-check every folder.
+  for (const drive of drives) {
     try {
+      const globPatterns = [
+        `${drive}/**/steam_api64.dll`,
+        `${drive}/**/steam_api.dll`,
+        `${drive}/**/UnityPlayer.dll`,
+        `${drive}/**/bink2w64.dll`,
+        `${drive}/**/steam_emu.ini`,
+        `${drive}/**/Galaxy64.dll`,
+      ];
+      
+      const ignore = [
+        '**/Windows/**', 
+        '**/Program Files/**', 
+        '**/Program Files (x86)/**', 
+        '**/AppData/**', 
+        '**/node_modules/**'
+      ];
+      
+      // Depth 4 allows us to find games buried like D:/MyGames/Action/Batman/steam_api64.dll
+      const maxDepth = drive === 'C:' ? 3 : 5;
+      
+      log.info(`[LibraryScanner] Running optimized deep scan on ${drive} (depth: ${maxDepth})`);
+      
+      const foundSignatures = await fg(globPatterns, {
+        deep: maxDepth,
+        ignore,
+        suppressErrors: true,
+        absolute: true,
+        onlyFiles: true
+      });
+      
+      const { scanFolder } = await import('../folderScanner.js');
+      
+      for (const sig of foundSignatures) {
+        let gameFolder = path.dirname(sig);
+        
+        // If it's buried in a bin folder, we step out to capture the actual game directory
+        if (gameFolder.toLowerCase().endsWith('win64') || gameFolder.toLowerCase().endsWith('binaries') || gameFolder.toLowerCase().endsWith('bin')) {
+          gameFolder = path.dirname(gameFolder);
+          if (gameFolder.toLowerCase().endsWith('engine') || gameFolder.toLowerCase().endsWith('binaries')) {
+            gameFolder = path.dirname(gameFolder);
+          }
+        }
+        
+        // Skip if already scanned
+        let alreadyScanned = false;
+        for (const scanned of scannedPaths) {
+          if (gameFolder.startsWith(scanned)) {
+            alreadyScanned = true; break;
+          }
+        }
+        if (alreadyScanned) continue;
+        scannedPaths.add(gameFolder);
+
+        const found = await scanFolder(gameFolder);
+        results.push(...found.map((g: any) => ({
+          name: g.name,
+          exePath: g.exePath,
+          source: 'folder_scan' as const,
+          installPath: path.dirname(g.exePath),
+          platform: 'PC',
+        })));
+      }
+    } catch (err) {
+      log.error(`[LibraryScanner] Deep scan failed on ${drive}:`, err);
+    }
+  }
+
+  // 3. Fallback to explicitly defined user paths
+  const userPaths: string[] = store.get('knownGamePaths') || [];
+  for (const folder of userPaths) {
+    if (!folder) continue;
+    try {
+      fs.accessSync(folder);
+      log.info(`[LibraryScanner] Scanning user defined folder: ${folder}`);
       const { scanFolder } = await import('../folderScanner.js');
       const found = await scanFolder(folder);
       results.push(...found.map((g: any) => ({
@@ -329,10 +415,9 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         installPath: path.dirname(g.exePath),
         platform: 'PC',
       })));
-    } catch (err) {
-      log.error(`[LibraryScanner] Folder scan failed for ${folder}:`, err);
-    }
+    } catch {}
   }
+  
   return results;
 }
 

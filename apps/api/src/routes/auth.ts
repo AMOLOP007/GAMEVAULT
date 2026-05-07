@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
+import { EpicOAuth } from '../lib/epicOAuth.js';
 
 export default async function authRoutes(fastify: FastifyInstance) {
   // GET /api/auth/me
@@ -40,5 +41,29 @@ export default async function authRoutes(fastify: FastifyInstance) {
         ...(steamId && { steamId })
       }
     });
+  });
+
+  // GET /api/auth/epic/login
+  fastify.get('/epic/login', async (request: FastifyRequest, reply: FastifyReply) => {
+    const url = EpicOAuth.getAuthorizationUrl();
+    return { url };
+  });
+
+  // POST /api/auth/epic/callback
+  fastify.post('/epic/callback', { preHandler: [(fastify as any).authenticate] }, async (request: FastifyRequest) => {
+    const { code } = request.body as { code: string };
+    const userId = (request.user as any).sub;
+
+    const data = await EpicOAuth.getAccessToken(code);
+    const accountId = data.account_id;
+    const accessToken = data.access_token;
+
+    // Save epicId to user
+    await prisma.user.update({
+      where: { id: userId },
+      data: { epicId: accountId }
+    });
+
+    return { success: true, accountId, accessToken };
   });
 }

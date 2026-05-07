@@ -21,6 +21,8 @@ model User {
   passwordHash  String?
   avatarUrl     String?
   steamId       String?
+  epicId        String?
+  gogId         String?
   provider      String   @default("SUPABASE")
   providerId    String?
   createdAt     DateTime @default(now())

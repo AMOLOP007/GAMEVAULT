@@ -12,9 +12,17 @@ interface ResolvableGame {
 }
 
 export async function resolveLaunchConfig(game: ResolvableGame): Promise<LaunchConfig> {
-  // Priority: Steam > Epic > GOG > URI > EXE
-  // Check if platform is actually installed before committing to its method
-  
+  // MASTER PRIORITY: Manual EXE provided by user
+  if (game.exePath) {
+    return {
+      gameId: game.id,
+      title: game.title,
+      method: 'exe',
+      exePath: game.exePath,
+    }
+  }
+
+  // PLATFORM PRIORITY: Steam > Epic > GOG > Stove > URI
   const { steamService } = await import('../services/steamService.js');
   const isSteamInstalled = steamService.getPath() !== null;
 
@@ -24,7 +32,6 @@ export async function resolveLaunchConfig(game: ResolvableGame): Promise<LaunchC
       title: game.title,
       method: 'steam',
       steamAppId: game.steamAppId,
-      exePath: game.exePath ?? undefined,
     }
   }
   
@@ -34,7 +41,9 @@ export async function resolveLaunchConfig(game: ResolvableGame): Promise<LaunchC
       title: game.title,
       method: 'epic',
       epicAppId: game.epicAppId,
-      exePath: game.exePath ?? undefined,
+      // Pass the stored launchUri — it contains the correct AppName for the protocol
+      // epicAppId is the CatalogNamespace (sandbox ID) used by the Achievement API, not for launch
+      launchUri: game.launchUri ?? undefined,
     }
   }
   
@@ -44,25 +53,18 @@ export async function resolveLaunchConfig(game: ResolvableGame): Promise<LaunchC
       title: game.title,
       method: 'gog',
       gogAppId: game.gogAppId as any,
-      exePath: game.exePath ?? undefined,
     }
   }
   
   if (game.launchUri) {
+    let method: LaunchMethod = 'uri'
+    if (game.launchUri.includes('stove')) method = 'stove'
+
     return {
       gameId: game.id,
       title: game.title,
-      method: 'uri',
+      method,
       launchUri: game.launchUri,
-    }
-  }
-  
-  if (game.exePath) {
-    return {
-      gameId: game.id,
-      title: game.title,
-      method: 'exe',
-      exePath: game.exePath,
     }
   }
   
@@ -76,6 +78,7 @@ export function getLaunchMethodLabel(method: LaunchMethod): string {
     gog: 'GOG Galaxy',
     exe: 'Direct Launch',
     uri: 'Custom URI',
+    stove: 'Stove',
   }
   return labels[method] ?? 'Unknown'
 }

@@ -9,10 +9,11 @@ export default async function gameRoutes(fastify: FastifyInstance) {
   // GET /api/games
   fastify.get('/', async (request: any, reply) => {
     const userId = request.user.sub;
-    const { status, search, is100Percent, wouldReplay } = request.query as any;
+    const { status, excludeStatus, search, is100Percent, wouldReplay } = request.query as any;
 
     const where: any = { userId };
     if (status) where.status = status;
+    if (excludeStatus && !status) where.status = { not: excludeStatus };
     if (is100Percent === 'true') where.is100Percent = true;
     if (wouldReplay === 'true') where.wouldReplay = true;
 
@@ -193,16 +194,18 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     const { id } = request.params;
     const { status, totalPlaytime, rating, notes, is100Percent, wouldReplay } = request.body;
     
+    const data = { status, totalPlaytime, rating, notes, is100Percent, wouldReplay };
+
+    // Try finding by UserGame ID
+    const userGame = await prisma.userGame.findUnique({ where: { id } });
+    if (userGame && userGame.userId === userId) {
+      return prisma.userGame.update({ where: { id }, data });
+    }
+
+    // Fallback to Game ID
     return prisma.userGame.update({
       where: { userId_gameId: { userId, gameId: id } },
-      data: { 
-        status, 
-        totalPlaytime,
-        rating,
-        notes,
-        is100Percent,
-        wouldReplay
-      }
+      data
     });
   });
 
