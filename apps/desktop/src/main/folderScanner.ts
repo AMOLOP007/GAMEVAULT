@@ -46,7 +46,7 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
 
           // Perform "State-of-the-Art" Binary Inspection
           const inspection = await inspectExecutable(fullPath);
-          if (inspection.confidence < 50) continue;
+          if (inspection.confidence < 40) continue;
 
           // If we are in a subfolder like /Binaries/Win64, use the parent folder name as game name
           let gameName = path.basename(file.name, '.exe');

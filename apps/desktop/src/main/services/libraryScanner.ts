@@ -362,7 +362,14 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         '**/LumaEmu.ini',
         '**/goggame-*.info',
         '**/steam_interfaces.txt',
-        '**/cream_api.ini'
+        '**/cream_api.ini',
+        '**/dsound.dll',
+        '**/version.dll',
+        '**/wininet.dll',
+        '**/winmm.dll',
+        '**/d3d11.dll',
+        '**/d3d12.dll',
+        '**/dxgi.dll'
       ];
       
       const ignore = [
@@ -388,10 +395,13 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         onlyFiles: true
       });
       
+      log.info(`[LibraryScanner] Found ${foundSignatures.length} potential game signatures on ${drive}`);
+      
       const { scanFolder } = await import('../folderScanner.js');
       
       for (const sig of foundSignatures) {
         let gameFolder = path.dirname(sig);
+        log.debug(`[LibraryScanner] Inspecting signature: ${sig}`);
         
         // If it's buried in a bin folder, we step out to capture the actual game directory
         if (gameFolder.toLowerCase().endsWith('win64') || gameFolder.toLowerCase().endsWith('binaries') || gameFolder.toLowerCase().endsWith('bin')) {

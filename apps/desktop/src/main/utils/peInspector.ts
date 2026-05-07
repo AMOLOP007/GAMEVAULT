@@ -84,6 +84,28 @@ export async function inspectExecutable(exePath: string): Promise<InspectionResu
     const dirPath = path.dirname(exePath);
     const checkDirs = [dirPath, path.dirname(dirPath), path.dirname(path.dirname(dirPath))];
     
+    const crackFileIndicators = [
+      'steam_api.dll', 'steam_api64.dll', 'steam_emu.ini', 'steam_interfaces.txt',
+      'voices38.dll', 'emp.dll', 'oo2core', 'goldberg', 'ali213', 'flt.ini', 'rune.ini',
+      'codex.ini', 'tenoke.ini', 'smartsteamemu', 'cream_api', 'lumaemu'
+    ];
+
+    let foundCrackFile = false;
+    for (const d of checkDirs) {
+      if (!fs.existsSync(d)) continue;
+      const dirFiles = fs.readdirSync(d);
+      
+      if (dirFiles.some(f => crackFileIndicators.some(ind => f.toLowerCase().includes(ind)))) {
+        foundCrackFile = true;
+        break;
+      }
+    }
+
+    if (foundCrackFile) {
+      score += 40;
+      indicators.push('CrackFileInDir');
+    }
+
     for (const d of checkDirs) {
       if (!fs.existsSync(d)) continue;
       const dirFiles = fs.readdirSync(d);
