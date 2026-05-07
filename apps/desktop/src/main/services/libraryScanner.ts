@@ -345,19 +345,37 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         '**/bink2w64.dll',
         '**/steam_emu.ini',
         '**/Galaxy64.dll',
+        '**/emp.dll',
+        '**/voices38.dll',
+        '**/oo2core_*.dll',
+        '**/dbdata.dll',
+        '**/EOSSDK-Win64-Shipping.dll',
+        '**/flt.ini',
+        '**/TENOKE.ini',
+        '**/RUNE.ini',
+        '**/Razor1911.ini',
+        '**/skidrow.ini',
+        '**/codex.ini',
+        '**/ali213.ini',
+        '**/3dmgame.ini',
+        '**/SmartSteamEmu.ini',
+        '**/LumaEmu.ini',
+        '**/goggame-*.info',
+        '**/steam_interfaces.txt',
+        '**/cream_api.ini'
       ];
       
       const ignore = [
         '**/Windows/**', 
-        '**/Program Files/**', 
-        '**/Program Files (x86)/**', 
         '**/AppData/**', 
         '**/node_modules/**',
-        '**/.git/**'
+        '**/.git/**',
+        '**/System Volume Information/**',
+        '**/$RECYCLE.BIN/**'
       ];
       
-      // Depth 5 allows us to find games buried like D:/MyGames/Action/Batman/steam_api64.dll
-      const maxDepth = drive === 'C:' ? 3 : 5;
+      // Deep scan: C is shallow to avoid system lag, other drives are deep (up to 8 levels)
+      const maxDepth = drive === 'C:' ? 3 : 8;
       
       log.info(`[LibraryScanner] Running optimized deep scan on ${drive} (depth: ${maxDepth})`);
       

@@ -64,45 +64,57 @@ export async function inspectExecutable(exePath: string): Promise<InspectionResu
     }
 
     // --- Repack/Crack Indicators ---
-    if (lowerContent.includes('steam_emu.ini') || lowerContent.includes('ali213')) {
-      score += 25;
+    const crackSigs = ['steam_emu.ini', 'ali213', 'voices38', 'goldberg', 'tenoke', 'codex', 'skidrow', 'empress', 'fitgirl', 'dodi'];
+    if (crackSigs.some(sig => lowerContent.includes(sig))) {
+      score += 35;
       indicators.push('CrackSignature');
     }
 
     // --- Negative Indicators (Productivity Apps) ---
     if (lowerContent.includes('node.js') || lowerContent.includes('electron.js')) {
-      score -= 50;
+      score -= 60;
       indicators.push('ElectronApp');
     }
     if (lowerContent.includes('vscode') || lowerContent.includes('chromium')) {
-      score -= 40;
+      score -= 50;
       indicators.push('WebBrowserEngine');
     }
 
-    // 2. Directory Heuristics
+    // 2. Directory Heuristics (Check current and parent dirs for game-like structure)
     const dirPath = path.dirname(exePath);
-    const dirFiles = fs.readdirSync(dirPath);
+    const checkDirs = [dirPath, path.dirname(dirPath), path.dirname(path.dirname(dirPath))];
     
-    // Check for large asset packs
-    const hasLargeAssets = dirFiles.some(f => {
-      const ext = path.extname(f).toLowerCase();
-      if (['.pak', '.vpk', '.rpf', '.archive', '.assets', '.unity3d'].includes(ext)) {
-        try {
-          return fs.statSync(path.join(dirPath, f)).size > 50 * 1024 * 1024; // > 50MB
-        } catch { return false; }
-      }
-      return false;
-    });
+    for (const d of checkDirs) {
+      if (!fs.existsSync(d)) continue;
+      const dirFiles = fs.readdirSync(d);
+      
+      // Check for large asset packs
+      const hasLargeAssets = dirFiles.some(f => {
+        const ext = path.extname(f).toLowerCase();
+        if (['.pak', '.vpk', '.rpf', '.archive', '.assets', '.unity3d', '.bundle', '.cas', '.cat'].includes(ext)) {
+          try {
+            return fs.statSync(path.join(d, f)).size > 50 * 1024 * 1024; // > 50MB
+          } catch { return false; }
+        }
+        return false;
+      });
 
-    if (hasLargeAssets) {
-      score += 30;
-      indicators.push('LargeAssetPacks');
+      if (hasLargeAssets) {
+        score += 40;
+        indicators.push('LargeAssetPacks');
+        break; // Only add once
+      }
     }
 
-    // Check for "Data" folders
-    if (dirFiles.some(f => f.toLowerCase().includes('data'))) {
-      score += 10;
-      indicators.push('DataFolder');
+    // Check for "Data", "Content", or "Engine" folders in the vicinity
+    for (const d of checkDirs) {
+      if (!fs.existsSync(d)) continue;
+      const dirFiles = fs.readdirSync(d);
+      if (dirFiles.some(f => ['data', 'content', 'engine', 'binaries'].includes(f.toLowerCase()))) {
+        score += 15;
+        indicators.push('GameStructure');
+        break;
+      }
     }
 
   } catch (err) {
@@ -110,7 +122,7 @@ export async function inspectExecutable(exePath: string): Promise<InspectionResu
   }
 
   return {
-    isGame: score >= 50,
+    isGame: score >= 45,
     confidence: Math.min(100, Math.max(0, score)),
     indicators
   };

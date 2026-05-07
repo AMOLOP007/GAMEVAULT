@@ -21,7 +21,7 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
     const files = fs.readdirSync(dir, { withFileTypes: true });
     
     // Check if this folder looks like a game folder (contains crack files or game engines)
-    const indicators = ['steam_api.dll', 'steam_api64.dll', 'steam_emu.ini', 'SmartSteamEmu', 'Goldberg', 'ALI213', 'UnityPlayer.dll', 'Engine/Binaries'];
+    const indicators = ['steam_api.dll', 'steam_api64.dll', 'steam_emu.ini', 'SmartSteamEmu', 'Goldberg', 'ALI213', 'UnityPlayer.dll', 'Engine/Binaries', 'voices38', 'emp.dll', 'oo2core'];
     const hasIndicator = files.some(f => indicators.some(ind => f.name.toLowerCase().includes(ind.toLowerCase())));
 
     for (const file of files) {
