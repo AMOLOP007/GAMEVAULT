@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import api from '@/lib/api';
+import { api } from '@/lib/api';
 
-export default function EpicCallback() {
+function EpicCallback() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const code = searchParams.get('code');
@@ -41,5 +41,13 @@ export default function EpicCallback() {
         <p className="text-sm text-white/40 mt-2">Please do not close this window.</p>
       </div>
     </div>
+  );
+}
+
+export default function EpicCallbackPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0c0c1d] flex items-center justify-center text-white">Loading...</div>}>
+      <EpicCallback />
+    </Suspense>
   );
 }
