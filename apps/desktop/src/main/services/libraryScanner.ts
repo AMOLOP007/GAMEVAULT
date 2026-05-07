@@ -422,13 +422,32 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         scannedPaths.add(gameFolder);
 
         const found = await scanFolder(gameFolder);
-        results.push(...found.map((g: any) => ({
-          name: g.name,
-          exePath: g.exePath,
-          source: 'folder_scan' as const,
-          installPath: path.dirname(g.exePath),
-          platform: 'PC',
-        })));
+        
+        // Extract icons for discovered games to provide a visual fallback if metadata fails
+        const { app } = await import('electron');
+        const gamesWithIcons = await Promise.all(found.map(async (g) => {
+          let iconUrl = '';
+          try {
+            const icon = await app.getFileIcon(g.exePath, { size: 'large' });
+            iconUrl = icon.toDataURL();
+          } catch (err) {
+            log.warn(`[LibraryScanner] Failed to get icon for ${g.name}`);
+          }
+          
+          return {
+            name: g.name,
+            exePath: g.exePath,
+            source: 'folder_scan' as const,
+            installPath: path.dirname(g.exePath),
+            platform: 'PC',
+            iconUrl
+          };
+        }));
+
+        results.push(...gamesWithIcons);
+        
+        // Give the UI thread a tiny break between heavy folder scans
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     } catch (err) {
       log.error(`[LibraryScanner] Deep scan failed on ${drive}:`, err);

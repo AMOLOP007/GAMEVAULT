@@ -62,7 +62,7 @@ export default async function gameRoutes(fastify: FastifyInstance) {
   // POST /api/games
   fastify.post('/', async (request: any, reply) => {
     const { 
-      title, exePath, processName, coverUrl, 
+      title, exePath, processName, coverUrl, iconUrl,
       steamAppId, epicAppId, gogAppId, source, launchUri,
       totalPlaytime, playtime2Weeks
     } = request.body;
@@ -83,7 +83,8 @@ export default async function gameRoutes(fastify: FastifyInstance) {
       try {
         game = await prisma.game.create({
           data: { 
-            title, exePath, processName, coverUrl,
+            title, exePath, processName, 
+            coverUrl: coverUrl || iconUrl,
             steamAppId: steamAppId ? Number(steamAppId) : null, 
             epicAppId, gogAppId, source, launchUri
           }

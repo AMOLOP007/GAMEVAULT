@@ -46,26 +46,49 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
 
           // Perform "State-of-the-Art" Binary Inspection
           const inspection = await inspectExecutable(fullPath);
-          if (inspection.confidence < 40) continue;
+          
+          // Special case: Small launchers in root (e.g. b1.exe for Black Myth Wukong)
+          const isRootLauncher = depth === 0 && stats.size > 100 * 1024 && stats.size < 5 * 1024 * 1024;
+          
+          if (inspection.confidence < 40 && !isRootLauncher) continue;
 
           // Robust Naming: If we are in a subfolder like /Binaries/Win64, climb up until we find the actual game folder name
           let gameName = path.basename(file.name, '.exe');
-          if (dir.toLowerCase().includes('binaries') || dir.toLowerCase().includes('win64') || dir.toLowerCase().includes('shipping')) {
-            let currentDir = dir;
+          let currentDir = dir;
+          
+          if (dir.toLowerCase().includes('binaries') || dir.toLowerCase().includes('win64') || dir.toLowerCase().includes('shipping') || dir.toLowerCase().includes('bin')) {
             while (
               currentDir.length > 3 && 
-              (['binaries', 'win64', 'win32', 'shipping', 'bin', 'x64', 'x86'].some(s => path.basename(currentDir).toLowerCase().includes(s)))
+              (['binaries', 'win64', 'win32', 'shipping', 'bin', 'x64', 'x86', 'engine'].some(s => path.basename(currentDir).toLowerCase().includes(s)))
             ) {
               currentDir = path.dirname(currentDir);
             }
             gameName = path.basename(currentDir);
+          } else if (depth === 0) {
+            gameName = path.basename(dir);
           }
 
-          results.push({
-            name: gameName,
-            exePath: fullPath,
-            lastModified: stats.mtime,
-          });
+          // Clean up name (remove version numbers, repacker names, etc.)
+          gameName = gameName.replace(/v?\d+(\.\d+)*/g, '').replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '').trim();
+          gameName = gameName.replace(/[\-_.]/g, ' ').replace(/\s+/g, ' ').trim();
+
+          // Deduplication: If we already found a better candidate for this folder, or if this is a better candidate
+          const existing = results.find(r => r.name.toLowerCase() === gameName.toLowerCase());
+          if (existing) {
+            const existingStats = fs.statSync(existing.exePath);
+            // If existing is small (launcher) and current is big, or vice-versa
+            // We generally prefer the root launcher (small) or the one with shorter path
+            if (fullPath.split(path.sep).length < existing.exePath.split(path.sep).length) {
+              existing.exePath = fullPath;
+            }
+          } else {
+            results.push({
+              name: gameName,
+              exePath: fullPath,
+              lastModified: stats.mtime,
+            });
+          }
+        }
         }
       }
     }
