@@ -7,6 +7,8 @@ const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
 const IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET;
 const RETRO_ACHIEVEMENTS_API_KEY = process.env.RETRO_ACHIEVEMENTS_API_KEY;
 
+console.log(`[Metadata] API Keys Status - RAWG: ${!!RAWG_API_KEY}, Steam: ${!!STEAM_API_KEY}, IGDB: ${!!IGDB_CLIENT_ID}`);
+
 interface AchievementData {
   key: string;
   title: string;
