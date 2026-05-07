@@ -321,11 +321,17 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
   const scannedPaths = new Set<string>();
   
   // 1. Get all drives dynamically
-  let drives: string[] = ['C:'];
-  try {
-    const { stdout } = await execAsync('wmic logicaldisk get name');
-    drives = stdout.match(/[A-Z]:/g) || ['C:'];
-  } catch {}
+  let drives: string[] = [];
+  for (let i = 65; i <= 90; i++) {
+    const drive = String.fromCharCode(i) + ':';
+    try {
+      fs.accessSync(drive + '\\');
+      drives.push(drive);
+    } catch {
+      // Drive doesn't exist
+    }
+  }
+  if (drives.length === 0) drives = ['C:'];
 
   // 2. State-of-the-art highly optimized global deep scan
   // We use fast-glob to aggressively seek out emulator DLLs and Engine binaries
