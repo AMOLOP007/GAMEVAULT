@@ -91,10 +91,27 @@ export default async function gameRoutes(fastify: FastifyInstance) {
         });
         hydrateGameMetadata(game.id).catch(console.error);
       } catch (err: any) {
-        // If it failed because it was created in parallel, find it again
+        // Handle unique constraint violations (e.g. same title or same exePath)
         if (err.code === 'P2002') {
-          game = await prisma.game.findFirst({ where: { title } });
+          game = await prisma.game.findFirst({ 
+            where: { 
+              OR: [
+                { title },
+                ...(exePath ? [{ exePath }] : [])
+              ]
+            } 
+          });
+          
+          // If we found the game by exePath but the title was different (e.g. from an older scanner version)
+          // Update the title to the better one discovered now
+          if (game && game.title !== title && (game.title.length < 5 || game.title === 'Binaries')) {
+             game = await prisma.game.update({
+               where: { id: game.id },
+               data: { title }
+             });
+          }
         } else {
+          console.error('[API] Unexpected error during game creation:', err);
           throw err;
         }
       }
