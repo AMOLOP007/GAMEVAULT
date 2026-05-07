@@ -89,7 +89,6 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
             });
           }
         }
-        }
       }
     }
   } catch (err) {
