@@ -40,7 +40,7 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
             'unins', 'setup', 'redist', 'vcredist', 'update', 'unitycrashhandler', 
             'crashpad', 'dxwebsetup', 'vulkan', 'physx', 'launcher', 'socialclub',
             'epicgames', 'steam', 'battlenet', 'origin', 'ubisoft', 'rockstar', 
-            'goggalaxy', 'overlay', 'bootstrap', 'helper', 'installer'
+            'goggalaxy', 'overlay', 'bootstrap', 'helper', 'installer', 'beservice', 'easyanticheat'
           ];
           if (skipList.some(s => name.includes(s))) continue;
 
@@ -48,11 +48,17 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
           const inspection = await inspectExecutable(fullPath);
           if (inspection.confidence < 40) continue;
 
-          // If we are in a subfolder like /Binaries/Win64, use the parent folder name as game name
+          // Robust Naming: If we are in a subfolder like /Binaries/Win64, climb up until we find the actual game folder name
           let gameName = path.basename(file.name, '.exe');
-          if (dir.toLowerCase().includes('binaries') || dir.toLowerCase().includes('win64')) {
-            const parentDir = path.dirname(dir);
-            gameName = path.basename(parentDir);
+          if (dir.toLowerCase().includes('binaries') || dir.toLowerCase().includes('win64') || dir.toLowerCase().includes('shipping')) {
+            let currentDir = dir;
+            while (
+              currentDir.length > 3 && 
+              (['binaries', 'win64', 'win32', 'shipping', 'bin', 'x64', 'x86'].some(s => path.basename(currentDir).toLowerCase().includes(s)))
+            ) {
+              currentDir = path.dirname(currentDir);
+            }
+            gameName = path.basename(currentDir);
           }
 
           results.push({
