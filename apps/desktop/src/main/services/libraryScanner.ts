@@ -339,12 +339,12 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
   for (const drive of drives) {
     try {
       const globPatterns = [
-        `${drive}/**/steam_api64.dll`,
-        `${drive}/**/steam_api.dll`,
-        `${drive}/**/UnityPlayer.dll`,
-        `${drive}/**/bink2w64.dll`,
-        `${drive}/**/steam_emu.ini`,
-        `${drive}/**/Galaxy64.dll`,
+        '**/steam_api64.dll',
+        '**/steam_api.dll',
+        '**/UnityPlayer.dll',
+        '**/bink2w64.dll',
+        '**/steam_emu.ini',
+        '**/Galaxy64.dll',
       ];
       
       const ignore = [
@@ -352,15 +352,17 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         '**/Program Files/**', 
         '**/Program Files (x86)/**', 
         '**/AppData/**', 
-        '**/node_modules/**'
+        '**/node_modules/**',
+        '**/.git/**'
       ];
       
-      // Depth 4 allows us to find games buried like D:/MyGames/Action/Batman/steam_api64.dll
+      // Depth 5 allows us to find games buried like D:/MyGames/Action/Batman/steam_api64.dll
       const maxDepth = drive === 'C:' ? 3 : 5;
       
       log.info(`[LibraryScanner] Running optimized deep scan on ${drive} (depth: ${maxDepth})`);
       
       const foundSignatures = await fg(globPatterns, {
+        cwd: `${drive}/`,
         deep: maxDepth,
         ignore,
         suppressErrors: true,
