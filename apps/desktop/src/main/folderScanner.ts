@@ -36,7 +36,12 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
         
         if (stats.size > minSize) {
           const name = file.name.toLowerCase();
-          const skipList = ['unins', 'setup', 'redist', 'vcredist', 'update', 'unitycrashhandler', 'crashpad', 'dxwebsetup', 'vulkan', 'physx'];
+          const skipList = [
+            'unins', 'setup', 'redist', 'vcredist', 'update', 'unitycrashhandler', 
+            'crashpad', 'dxwebsetup', 'vulkan', 'physx', 'launcher', 'socialclub',
+            'epicgames', 'steam', 'battlenet', 'origin', 'ubisoft', 'rockstar', 
+            'goggalaxy', 'overlay', 'bootstrap', 'helper', 'installer'
+          ];
           if (skipList.some(s => name.includes(s))) continue;
 
           // Perform "State-of-the-Art" Binary Inspection
