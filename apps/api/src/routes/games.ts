@@ -100,7 +100,10 @@ export default async function gameRoutes(fastify: FastifyInstance) {
       }
     }
 
-    if (!game) throw new Error('Failed to resolve or create game');
+    if (!game) {
+      console.error(`[API] Failed to resolve or create game: ${title}`, { exePath, steamAppId, epicAppId });
+      throw new Error('Failed to resolve or create game');
+    }
 
     // Add to user library using upsert to handle concurrency
     const { getActiveActivity } = await import('../services/playtimeService.js');

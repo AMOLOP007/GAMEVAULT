@@ -40,7 +40,8 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
             'unins', 'setup', 'redist', 'vcredist', 'update', 'unitycrashhandler', 
             'crashpad', 'dxwebsetup', 'vulkan', 'physx', 'launcher', 'socialclub',
             'epicgames', 'steam', 'battlenet', 'origin', 'ubisoft', 'rockstar', 
-            'goggalaxy', 'overlay', 'bootstrap', 'helper', 'installer', 'beservice', 'easyanticheat'
+            'goggalaxy', 'overlay', 'bootstrap', 'helper', 'installer', 'beservice', 'easyanticheat',
+            'healthcheck', 'afterburner', 'rtss', 'nvidia', 'amd', 'intel', 'microsoft'
           ];
           if (skipList.some(s => name.includes(s))) continue;
 
@@ -68,8 +69,9 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
             gameName = path.basename(dir);
           }
 
-          // Clean up name (remove version numbers, repacker names, etc.)
-          gameName = gameName.replace(/v?\d+(\.\d+)*/g, '').replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '').trim();
+          // Clean up name: Only strip version patterns like v1.0, 1.2.3, or common repackers
+          // We preserve numbers like "5" in "GTA 5" by requiring a "v" prefix or a dot separator for versions
+          gameName = gameName.replace(/v\d+(\.\d+)*/gi, '').replace(/\d+\.\d+(\.\d+)*/g, '').replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '').trim();
           gameName = gameName.replace(/[\-_.]/g, ' ').replace(/\s+/g, ' ').trim();
 
           // Deduplication: If we already found a better candidate for this folder, or if this is a better candidate
