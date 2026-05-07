@@ -101,12 +101,11 @@ export default async function gameRoutes(fastify: FastifyInstance) {
             } 
           });
           
-          // If we found the game by exePath but the title was different (e.g. from an older scanner version)
-          // Update the title to the better one discovered now
-             game = await prisma.game.update({
-               where: { id: game.id },
-               data: { title }
-             });
+          if (game && game.title !== title) {
+            game = await prisma.game.update({
+              where: { id: game.id },
+              data: { title }
+            });
           }
         } else {
           console.error('[API] Unexpected error during game creation:', err);
