@@ -100,9 +100,10 @@ class ApiClient {
   }
 
   // Games
-  async getGames(filters?: { status?: string; search?: string; genre?: string; is100Percent?: boolean; wouldReplay?: boolean }) {
+  async getGames(filters?: { status?: string; search?: string; genre?: string; is100Percent?: boolean; wouldReplay?: boolean; excludeStatus?: string }) {
     const params = new URLSearchParams();
     if (filters?.status) params.set('status', filters.status);
+    if (filters?.excludeStatus) params.set('excludeStatus', filters.excludeStatus);
     if (filters?.search) params.set('search', filters.search);
     if (filters?.genre) params.set('genre', filters.genre);
     if (filters?.is100Percent) params.set('is100Percent', 'true');
