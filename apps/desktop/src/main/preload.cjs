@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('gameVault', {
   confirmDiscovery: (games) => ipcRenderer.invoke('library:confirmAll', { games }),
   launchGame: (gameId, options) => ipcRenderer.invoke('games:launch', gameId, options),
   setGameExe: (gameId) => ipcRenderer.invoke('games:setExe', gameId),
+  selectFile: () => ipcRenderer.invoke('games:selectFile'),
 
   // ── Launch Events (main → renderer) ─────────────────────────────────────────
   onGameLaunching: (cb) => {

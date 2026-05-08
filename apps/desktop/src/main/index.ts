@@ -639,7 +639,7 @@ ipcMain.handle('games:setExe', async (_, gameId: string) => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     title: 'Select Game Executable',
     defaultPath: 'C:\\',
-    filters: [{ name: 'Game Executable', extensions: ['exe'] }],
+    filters: [{ name: 'Game Executable or Script', extensions: ['exe', 'bat', 'cmd', 'lnk', 'url'] }],
     properties: ['openFile'],
   })
 
@@ -658,6 +658,22 @@ ipcMain.handle('games:setExe', async (_, gameId: string) => {
   mainWindow?.webContents.send('game:exeSet', { gameId, exePath })
 
   return { success: true, exePath }
+})
+
+// ─── SELECT FILE: Let user browse for any file ────────────────────────────
+ipcMain.handle('games:selectFile', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    title: 'Select Game File (EXE, BAT, etc.)',
+    defaultPath: 'C:\\',
+    filters: [{ name: 'Game Executable or Script', extensions: ['exe', 'bat', 'cmd', 'lnk', 'url'] }],
+    properties: ['openFile'],
+  })
+
+  if (result.canceled || !result.filePaths[0]) {
+    return null
+  }
+
+  return result.filePaths[0]
 })
 
 ipcMain.handle('library:confirmAll', async (_, { games }) => {

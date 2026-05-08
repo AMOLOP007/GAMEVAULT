@@ -25,8 +25,17 @@ export default async function statsRoutes(fastify: FastifyInstance) {
     });
 
     // Time-based aggregates
+    const query = request.query as any;
+    const timezoneOffset = query.timezoneOffset ? parseInt(query.timezoneOffset) : 0;
+    
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Adjust now to client's local time to find the start of day
+    const clientNow = new Date(now.getTime() - (timezoneOffset * 60000));
+    const startOfTodayClient = new Date(clientNow.getFullYear(), clientNow.getMonth(), clientNow.getDate());
+    
+    // Convert back to server time to query DB
+    const startOfToday = new Date(startOfTodayClient.getTime() + (timezoneOffset * 60000));
+
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     startOfWeek.setHours(0, 0, 0, 0);

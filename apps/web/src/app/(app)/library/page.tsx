@@ -264,58 +264,44 @@ export default function LibraryPage() {
 
 function AddGameModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [title, setTitle] = useState('');
-  const [genre, setGenre] = useState('');
-  const [platform, setPlatform] = useState('PC');
   const [status, setStatus] = useState('BACKLOG');
-  const [processName, setProcessName] = useState('');
-  const [coverUrl, setCoverUrl] = useState('');
-
+  const [exePath, setExePath] = useState('');
   const [loading, setLoading] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  useEffect(() => {
-    if (!title || title.length < 3 || !showSuggestions) {
-      setSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const results = await api.searchGamesAPI(title);
-        setSearchResults(results);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setSearching(false);
+  const handleSelectFile = async () => {
+    try {
+      if ((window as any).gameVault?.selectFile) {
+        const path = await (window as any).gameVault.selectFile();
+        if (path) {
+          setExePath(path);
+          // Auto-fill title from filename if empty
+          if (!title) {
+            const filename = path.split(/[\\/]/).pop();
+            const dotIndex = filename.lastIndexOf('.');
+            const name = dotIndex > 0 ? filename.substring(0, dotIndex) : filename;
+            setTitle(name);
+          }
+        }
+      } else {
+        alert("File selection is only available in the Desktop App");
       }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [title, showSuggestions]);
-
-  const selectGame = (game: any) => {
-    setTitle(game.title);
-    setGenre(game.genre?.join(', ') || '');
-    if (game.platform && game.platform.length > 0) {
-      const p = game.platform.find((p: string) => p.includes('PC') || p.includes('PlayStation') || p.includes('Xbox')) || game.platform[0];
-      setPlatform(p);
+    } catch (err) {
+      console.error('File selection failed:', err);
     }
-    setCoverUrl(game.coverUrl || '');
-    setShowSuggestions(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      const filename = exePath ? exePath.split(/[\\/]/).pop() : undefined;
       await api.addGame({
         title,
-        genre: genre ? genre.split(',').map((g) => g.trim()).filter(Boolean) : [],
-        platform: [platform],
         status,
-        coverUrl: coverUrl || undefined,
-        processName: processName || undefined,
+        exePath: exePath || undefined,
+        processName: filename,
+        platform: ['PC'], // Hardcoded as requested
+        // Genre will be fetched by API from RAWG based on title
       });
       onAdded();
       onClose();
@@ -342,7 +328,6 @@ function AddGameModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-xl bg-[#0c0c1d] border border-[#8b5cf6]/15 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_40px_rgba(139,92,246,0.06)] overflow-hidden"
       >
-        {/* Top accent */}
         <div className="h-[2px] bg-gradient-to-r from-transparent via-[#8b5cf6] to-transparent opacity-40" />
 
         <div className="p-7 space-y-5">
@@ -354,82 +339,45 @@ function AddGameModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5 relative">
-            <div className="relative">
-              <AnimatedInput
-                label="Game Title"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  setShowSuggestions(true);
-                }}
-                placeholder="Search for a game..."
-                required
-              />
+            <AnimatedInput
+              label="Game Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter game title..."
+              required
+            />
 
-              <AnimatePresence>
-                {showSuggestions && searchResults.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    className="absolute z-[110] w-full mt-2 bg-[#0c0c1d] border border-[#8b5cf6]/15 rounded-xl overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.5)] max-h-56 overflow-y-auto p-1.5 space-y-0.5"
-                  >
-                    {searchResults.map((res: any) => (
-                      <div
-                        key={res.rawgId}
-                        onClick={() => selectGame(res)}
-                        className="flex items-center gap-3 p-2.5 hover:bg-[#8b5cf6]/06 cursor-pointer rounded-lg transition-colors border border-transparent hover:border-[#8b5cf6]/10"
-                      >
-                        <div className="w-10 h-14 rounded-md shrink-0 overflow-hidden bg-[#08081a] border border-[#8b5cf6]/08">
-                          {res.coverUrl && <img src={res.coverUrl} alt={res.title} className="w-full h-full object-cover" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[13px] truncate text-white">{res.title}</p>
-                          <p className="text-[9px] text-[#475569] font-bold uppercase tracking-wider">{res.genre?.slice(0, 2).join(' • ')}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <AnimatedInput
-                label="Genre"
-                value={genre}
-                onChange={(e) => setGenre(e.target.value)}
-                placeholder="RPG, Action..."
-              />
-              <AnimatedInput
-                label="Platform"
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value)}
-                placeholder="PC, PS5..."
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-[#8b5cf6]/60 uppercase tracking-[0.12em] block ml-0.5">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="input-field cursor-pointer text-sm"
-                >
-                  <option value="PLAYING">Playing</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="BACKLOG">Backlog</option>
-                  <option value="WISHLIST">Wishlist</option>
-                  <option value="DROPPED">Dropped</option>
-                </select>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-[#8b5cf6]/60 uppercase tracking-[0.12em] block ml-0.5">
+                Executable / File
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={exePath}
+                  readOnly
+                  placeholder="Select a file (EXE, BAT, etc.)..."
+                  className="input-field flex-1 text-sm bg-[#08081a]"
+                />
+                <AnimatedButton type="button" onClick={handleSelectFile} variant="ghost" className="border-[#8b5cf6]/20 text-[#8b5cf6]">
+                  Browse
+                </AnimatedButton>
               </div>
-              <AnimatedInput
-                label="Process Name"
-                value={processName}
-                onChange={(e) => setProcessName(e.target.value)}
-                placeholder="game.exe"
-              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-[#8b5cf6]/60 uppercase tracking-[0.12em] block ml-0.5">Status</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="input-field cursor-pointer text-sm"
+              >
+                <option value="PLAYING">Playing</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="BACKLOG">Backlog</option>
+                <option value="WISHLIST">Wishlist</option>
+                <option value="DROPPED">Dropped</option>
+              </select>
             </div>
 
             <div className="flex gap-3 pt-2">

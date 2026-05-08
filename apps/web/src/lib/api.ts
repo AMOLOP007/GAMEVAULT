@@ -133,8 +133,9 @@ class ApiClient {
   }
 
   // Stats
-  async getStats() {
-    return this.request<any>('/api/stats');
+  async getStats(timezoneOffset?: number) {
+    const qs = timezoneOffset !== undefined ? `?timezoneOffset=${timezoneOffset}` : '';
+    return this.request<any>(`/api/stats${qs}`);
   }
 
   async getWeeklyStats() {

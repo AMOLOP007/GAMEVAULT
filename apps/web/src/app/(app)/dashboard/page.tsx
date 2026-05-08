@@ -39,8 +39,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const timezoneOffset = new Date().getTimezoneOffset();
     Promise.all([
-      api.getStats(), 
+      api.getStats(timezoneOffset), 
       api.getWeeklyStats(),
       api.get('/api/social/activity').catch(() => [])
     ])

@@ -134,6 +134,7 @@ export class GameLauncher {
         stdio: 'ignore',
         cwd,
         windowsHide: false,
+        shell: true, // Support .bat and .cmd files on Windows
         env: { ...process.env }
       })
       
