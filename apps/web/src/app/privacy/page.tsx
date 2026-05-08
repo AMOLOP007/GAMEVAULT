@@ -31,7 +31,7 @@ export default function PrivacyPage() {
               <div className="space-y-4">
                 <h2 className="text-2xl font-black text-white uppercase tracking-tight">Our Philosophy</h2>
                 <p className="leading-relaxed">
-                  GameVault is built on the principle of <strong>Local-First Sovereignty</strong>. We believe your gaming data—your playtime, your library, and your achievements—should belong to you, not a corporation. Our architecture is designed to keep your sensitive data on your machine, syncing only what is necessary for social features and cross-device convenience.
+                  GameVault is a powerful game launcher and playtime measurer built on the principle of <strong>Local-First Sovereignty</strong>. We believe your gaming data—your playtime, your library, and your achievements—should belong to you, not a corporation. Our architecture is designed to keep your sensitive data on your machine, syncing only what is necessary for social features and cross-device convenience.
                 </p>
               </div>
             </div>
