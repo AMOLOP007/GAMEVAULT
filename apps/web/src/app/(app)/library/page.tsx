@@ -305,8 +305,9 @@ function AddGameModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
       });
       onAdded();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(err.message || 'Failed to add game');
     } finally {
       setLoading(false);
     }

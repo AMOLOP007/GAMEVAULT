@@ -68,13 +68,35 @@ export default async function gameRoutes(fastify: FastifyInstance) {
       searchHint, installPath  // searchHint = folder name for metadata lookup
     } = request.body;
     const userId = request.user.sub;
-
+    
     // Determine if title looks like a cryptic internal code
     const titleIsGarbage = title && (title.length <= 4 || /^[a-zA-Z]\d*$/.test(title));
     // The best name to use: prefer searchHint if title is garbage
     const bestTitle = (titleIsGarbage && searchHint && searchHint.length > 4) ? searchHint : title;
     // The hint to pass to metadata: always send folder name if available
     const metadataHint = searchHint || installPath ? (installPath ? require('path').basename(installPath) : searchHint) : undefined;
+
+    // ─── DUPLICATE CHECK ───────────────────────────────────────────────────
+    const userGames = await prisma.userGame.findMany({
+      where: { userId },
+      include: { game: true }
+    });
+
+    const cleanInputTitle = bestTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    const duplicate = userGames.find(ug => {
+      const cleanExistingTitle = ug.game.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const sameTitle = cleanInputTitle === cleanExistingTitle;
+      const sameExe = exePath && ug.game.exePath === exePath;
+      return sameTitle || sameExe;
+    });
+
+    if (duplicate) {
+      return reply.code(400).send({ 
+        error: `Game already exists in your library as "${duplicate.game.title}"` 
+      });
+    }
+    // ───────────────────────────────────────────────────────────────────────
 
     // Use a transaction or a very robust check to handle concurrency
     let game = await prisma.game.findFirst({
