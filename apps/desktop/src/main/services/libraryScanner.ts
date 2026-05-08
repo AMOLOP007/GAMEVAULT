@@ -336,40 +336,43 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
   // 2. State-of-the-art highly optimized global deep scan
   // We use fast-glob to aggressively seek out emulator DLLs and Engine binaries
   // This takes milliseconds instead of the hours it would take to size-check every folder.
+  // Folders that are engine/build sub-dirs — walk UP past these to find game root
+  const engineSubFolders = new Set(['binaries', 'win64', 'win32', 'x64', 'x86', 'shipping', 'bin', 'engine', 'content', 'data']);
+
   for (const drive of drives) {
     try {
       const globPatterns = [
+        // ── Steam Emulator DLLs (most common crack method) ──
         '**/steam_api64.dll',
         '**/steam_api.dll',
-        '**/UnityPlayer.dll',
-        '**/bink2w64.dll',
         '**/steam_emu.ini',
-        '**/Galaxy64.dll',
-        '**/emp.dll',
-        '**/voices38.dll',
-        '**/oo2core_*.dll',
-        '**/dbdata.dll',
-        '**/EOSSDK-Win64-Shipping.dll',
-        '**/flt.ini',
+        '**/steam_interfaces.txt',
+        '**/goldberg_steam_emu.ini',
+        // ── Modern Crack Scene Signatures ──
+        '**/voices38.dll',          // voices38 / Black Myth Wukong bypass
+        '**/emp.dll',               // Empress crack
+        '**/ali213.ini',
+        '**/codex.ini',
+        '**/skidrow.ini',
         '**/TENOKE.ini',
         '**/RUNE.ini',
+        '**/flt.ini',
         '**/Razor1911.ini',
-        '**/skidrow.ini',
-        '**/codex.ini',
-        '**/ali213.ini',
         '**/3dmgame.ini',
         '**/SmartSteamEmu.ini',
         '**/LumaEmu.ini',
-        '**/goggame-*.info',
-        '**/steam_interfaces.txt',
         '**/cream_api.ini',
-        '**/dsound.dll',
-        '**/version.dll',
-        '**/wininet.dll',
-        '**/winmm.dll',
-        '**/d3d11.dll',
-        '**/d3d12.dll',
-        '**/dxgi.dll'
+        '**/cream_api.dll',
+        // ── Game Engine Identifiers (both legit and cracked) ──
+        '**/UnityPlayer.dll',
+        '**/bink2w64.dll',
+        '**/bink2w32.dll',
+        '**/oo2core_*.dll',
+        '**/EOSSDK-Win64-Shipping.dll',
+        '**/Galaxy64.dll',
+        // ── GOG Galaxy game metadata ──
+        '**/goggame-*.info',
+        '**/gog.ico',
       ];
       
       const ignore = [
@@ -378,11 +381,18 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         '**/node_modules/**',
         '**/.git/**',
         '**/System Volume Information/**',
-        '**/$RECYCLE.BIN/**'
+        '**/$RECYCLE.BIN/**',
+        // Exclude known launcher dirs (not actual games)
+        '**/Epic Games/Launcher/**',
+        '**/Rockstar Games/Launcher/**',
+        '**/Battle.net/**',
+        '**/Origin/**',
+        '**/System32/**',
+        '**/SysWOW64/**',
       ];
       
-      // Deep scan: C is shallow to avoid system lag, other drives are deep (up to 8 levels)
-      const maxDepth = drive === 'C:' ? 3 : 8;
+      // Deep scan: C is shallow to avoid system lag, other drives are deep
+      const maxDepth = drive === 'C:' ? 4 : 8;
       
       log.info(`[LibraryScanner] Running optimized deep scan on ${drive} (depth: ${maxDepth})`);
       
@@ -396,32 +406,58 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
       });
       
       log.info(`[LibraryScanner] Found ${foundSignatures.length} potential game signatures on ${drive}`);
+      if (foundSignatures.length > 0) {
+        log.info(`[LibraryScanner] First 5 sigs: ${foundSignatures.slice(0, 5).map(s => path.basename(s)).join(', ')}`);
+      }
       
       const { scanFolder } = await import('../folderScanner.js');
       
       for (const sig of foundSignatures) {
+        // ── Resolve game root from signature path ──────────────────────────────
+        // Example: D:/BMW/Black Myth Wukong/b1/Binaries/Win64/voices38.dll
+        // Walk UP until we escape all engine sub-folder names
         let gameFolder = path.dirname(sig);
-        log.debug(`[LibraryScanner] Inspecting signature: ${sig}`);
         
-        // If it's buried in a bin folder, we step out to capture the actual game directory
-        if (gameFolder.toLowerCase().endsWith('win64') || gameFolder.toLowerCase().endsWith('binaries') || gameFolder.toLowerCase().endsWith('bin')) {
-          gameFolder = path.dirname(gameFolder);
-          if (gameFolder.toLowerCase().endsWith('engine') || gameFolder.toLowerCase().endsWith('binaries')) {
-            gameFolder = path.dirname(gameFolder);
-          }
+        let levelsUp = 0;
+        while (levelsUp < 6) {
+          const folderName = path.basename(gameFolder).toLowerCase();
+          if (!engineSubFolders.has(folderName)) break;
+          const parent = path.dirname(gameFolder);
+          if (parent === gameFolder) break; // at root
+          gameFolder = parent;
+          levelsUp++;
         }
+
+        // Additional rule: if current folder name is a single letter or letter+digit (e.g. "b1"),
+        // step up once more to capture the actual named game folder.
+        // e.g. "Black Myth Wukong/b1" → "Black Myth Wukong"
+        const parentFolder = path.dirname(gameFolder);
+        const gameFolderBaseName = path.basename(gameFolder);
+        if (/^[a-zA-Z]\d*$/.test(gameFolderBaseName) && parentFolder.length > 3) {
+          gameFolder = parentFolder;
+        }
+
+        // Skip drive roots
+        if (gameFolder.length <= 3) continue;
         
-        // Skip if already scanned
+        // Skip if already scanned (or if it's a sub/super-path of something already scanned)
         let alreadyScanned = false;
         for (const scanned of scannedPaths) {
-          if (gameFolder.startsWith(scanned)) {
+          if (gameFolder.toLowerCase().startsWith(scanned.toLowerCase()) ||
+              scanned.toLowerCase().startsWith(gameFolder.toLowerCase())) {
             alreadyScanned = true; break;
           }
         }
         if (alreadyScanned) continue;
-        scannedPaths.add(gameFolder);
+        scannedPaths.add(gameFolder.toLowerCase());
+
+        log.info(`[LibraryScanner] Processing game root: ${gameFolder} (sig: ${path.basename(sig)})`);
 
         const found = await scanFolder(gameFolder);
+        
+        if (found.length === 0) {
+          log.warn(`[LibraryScanner] scanFolder returned 0 games for ${gameFolder}`);
+        }
         
         // Extract icons for discovered games to provide a visual fallback if metadata fails
         const { app } = await import('electron');
@@ -430,7 +466,7 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
           try {
             const icon = await app.getFileIcon(g.exePath, { size: 'large' });
             iconUrl = icon.toDataURL();
-          } catch (err) {
+          } catch {
             log.warn(`[LibraryScanner] Failed to get icon for ${g.name}`);
           }
           
@@ -438,7 +474,7 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
             name: g.name,
             exePath: g.exePath,
             source: 'folder_scan' as const,
-            installPath: path.dirname(g.exePath),
+            installPath: gameFolder,
             platform: 'PC',
             iconUrl
           };
@@ -447,7 +483,7 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         results.push(...gamesWithIcons);
         
         // Give the UI thread a tiny break between heavy folder scans
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 20));
       }
     } catch (err) {
       log.error(`[LibraryScanner] Deep scan failed on ${drive}:`, err);
