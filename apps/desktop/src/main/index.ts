@@ -8,7 +8,7 @@ import prisma from './db.js';
 import { GameDetector } from './detectors/GameDetector.js';
 import { GameTracker } from './tracker.js';
 import { AchievementEngine } from './achievements/AchievementEngine.js';
-import { CrackedAchievementEngine } from './achievements/CrackedAchievementEngine.js';
+import { CrackedAchievementEngine } from './achievements/LocalAchievementEngine.js';
 import { TrophyOverlay } from './overlay/TrophyOverlay.js';
 import { PsListDetector } from './detectors/PsListDetector.js';
 import { SyncService } from './syncService.js';

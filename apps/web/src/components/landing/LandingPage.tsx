@@ -232,7 +232,7 @@ export default function LandingPage() {
                 { icon: Fingerprint, t: "Forensic Sync", d: "Reads local Steam files for 99.9% playtime accuracy.", c: "#d946ef" },
                 { icon: Globe, t: "Instant Pulse", d: "Optimized transitions and zero-lag tab switching.", c: "#34d399" },
                 { icon: BarChart3, t: "Visual Momentum", d: "Beautiful engagement flows spread across your week.", c: "#fbbf24" },
-                { icon: Rocket, t: "1.3 Stabilization", d: "Critical fixes for cracked game discovery and local icon extraction.", c: "#f87171" }
+                { icon: Rocket, t: "1.3 Stabilization", d: "Critical fixes for game discovery and local icon extraction.", c: "#f87171" }
               ].map((f, i) => (
                 <motion.div
                   key={i}
