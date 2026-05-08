@@ -355,7 +355,7 @@ function AddGameModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
                 <input
                   type="text"
                   value={exePath}
-                  readOnly
+                  onChange={(e) => setExePath(e.target.value)}
                   placeholder="Select a file (EXE, BAT, etc.)..."
                   className="input-field flex-1 text-sm bg-[#08081a]"
                 />
