@@ -349,11 +349,10 @@ export default function LandingPage() {
             <span className="text-2xl font-black tracking-tighter uppercase italic">GAMEVAULT</span>
           </div>
           <div className="flex gap-12 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
-            {['Reddit', 'Discord', 'Github', 'Privacy'].map(link => (
+            {['Reddit', 'Discord', 'Privacy'].map(link => (
               <a 
                 key={link} 
                 href={
-                  link === 'Github' ? 'https://github.com/AMOLOP007' : 
                   link === 'Privacy' ? '/privacy' : 
                   link === 'Reddit' ? 'https://www.reddit.com/user/Witty-Engine-7304/comments/1t73t10/gamevault/' : 
                   link === 'Discord' ? 'https://discord.gg/BY7CVMRCVc' : '#'
