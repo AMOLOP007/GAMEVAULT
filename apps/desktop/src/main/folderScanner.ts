@@ -51,6 +51,57 @@ function checkDirForSignatures(dir: string): 'crack' | 'engine' | 'none' {
 }
 
 /**
+ * Searches the directory for common config files (.ini, .acf, .info)
+ * and attempts to extract the exact game name from them.
+ */
+function extractNameFromConfig(dir: string): string | null {
+  try {
+    if (!fs.existsSync(dir)) return null;
+    const files = fs.readdirSync(dir);
+    
+    for (const file of files) {
+      const lowerFile = file.toLowerCase();
+      const fullPath = path.join(dir, file);
+      
+      try {
+        // Steam/Crack INI files
+        if (lowerFile.endsWith('.ini')) {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const match = content.match(/^(?:AppName|GameName|Title)\s*=\s*(.+)$/im);
+          if (match && match[1] && match[1].trim().length > 2) {
+            return match[1].trim();
+          }
+        }
+        
+        // Steam appmanifest files
+        else if (lowerFile.startsWith('appmanifest_') && lowerFile.endsWith('.acf')) {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const match = content.match(/"name"\s+"([^"]+)"/i);
+          if (match && match[1] && match[1].trim().length > 2) {
+            return match[1].trim();
+          }
+        }
+        
+        // GOG info files
+        else if (lowerFile.startsWith('goggame-') && lowerFile.endsWith('.info')) {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const data = JSON.parse(content);
+          if (data.name && data.name.trim().length > 2) {
+            return data.name.trim();
+          }
+        }
+      } catch (err) {
+        // Skip unreadable files
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+
+/**
  * Find the best EXE candidate in a folder, preferring the root-level
  * largest EXE that is not in the skip list.
  */
@@ -93,27 +144,31 @@ function findBestExe(gameFolder: string): { exePath: string; name: string } | nu
 
   const best = sorted[0];
 
-  // Determine game name from folder hierarchy
-  let name = '';
-  const parts = gameFolder.replace(/\\/g, '/').split('/');
-  // Walk from deepest folder upward, skipping engine/bin folders
-  const skipFolders = ['binaries', 'win64', 'win32', 'x64', 'x86', 'shipping', 'bin', 'engine', 'content'];
-  for (let i = parts.length - 1; i >= 0; i--) {
-    if (!skipFolders.includes(parts[i].toLowerCase()) && parts[i].length > 0) {
-      name = parts[i];
-      break;
-    }
-  }
-  if (!name) name = path.basename(best.exePath, '.exe');
+  // 1. Try to extract exact game name from configuration files in the root or parent
+  let name = extractNameFromConfig(gameFolder) || extractNameFromConfig(path.dirname(gameFolder));
 
-  // Clean up name
-  name = name
-    .replace(/v\d+(\.\d+)*/gi, '')
-    .replace(/\d+\.\d+(\.\d+)*/g, '')
-    .replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '')
-    .replace(/[-_.]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // 2. Fallback to determining game name from folder hierarchy
+  if (!name) {
+    const parts = gameFolder.replace(/\\/g, '/').split('/');
+    // Walk from deepest folder upward, skipping engine/bin folders
+    const skipFolders = ['binaries', 'win64', 'win32', 'x64', 'x86', 'shipping', 'bin', 'engine', 'content'];
+    for (let i = parts.length - 1; i >= 0; i--) {
+      if (!skipFolders.includes(parts[i].toLowerCase()) && parts[i].length > 0) {
+        name = parts[i];
+        break;
+      }
+    }
+    if (!name) name = path.basename(best.exePath, '.exe');
+
+    // Clean up name
+    name = name
+      .replace(/v\d+(\.\d+)*/gi, '')
+      .replace(/\d+\.\d+(\.\d+)*/g, '')
+      .replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '')
+      .replace(/[-_.]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
   return { exePath: best.exePath, name };
 }
@@ -184,31 +239,37 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
           if (inspection.confidence < 40) continue;
         }
 
-        // Determine game name
-        let gameName = path.basename(file.name, '.exe');
-        let currentDir = dir;
-        const skipFolders = ['binaries', 'win64', 'win32', 'shipping', 'bin', 'x64', 'x86', 'engine'];
-        if (skipFolders.some(s => currentDir.toLowerCase().includes(`\\${s}\\`) || currentDir.toLowerCase().endsWith(`\\${s}`))) {
-          while (
-            currentDir.length > 3 &&
-            skipFolders.some(s => path.basename(currentDir).toLowerCase() === s)
-          ) {
-            currentDir = path.dirname(currentDir);
+        // 1. Try config files in this dir or parent
+        let gameName = extractNameFromConfig(dir) || extractNameFromConfig(path.dirname(dir));
+        
+        // 2. Fallback to folder structure
+        if (!gameName) {
+          gameName = path.basename(file.name, '.exe');
+          let currentDir = dir;
+          const skipFolders = ['binaries', 'win64', 'win32', 'shipping', 'bin', 'x64', 'x86', 'engine'];
+          if (skipFolders.some(s => currentDir.toLowerCase().includes(`\\${s}\\`) || currentDir.toLowerCase().endsWith(`\\${s}`))) {
+            while (
+              currentDir.length > 3 &&
+              skipFolders.some(s => path.basename(currentDir).toLowerCase() === s)
+            ) {
+              currentDir = path.dirname(currentDir);
+            }
+            gameName = path.basename(currentDir);
+          } else if (depth === 0) {
+            gameName = path.basename(dir);
           }
-          gameName = path.basename(currentDir);
-        } else if (depth === 0) {
-          gameName = path.basename(dir);
+
+          gameName = gameName
+            .replace(/v\d+(\.\d+)*/gi, '')
+            .replace(/\d+\.\d+(\.\d+)*/g, '')
+            .replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '')
+            .replace(/[-_.]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
         }
 
-        gameName = gameName
-          .replace(/v\d+(\.\d+)*/gi, '')
-          .replace(/\d+\.\d+(\.\d+)*/g, '')
-          .replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '')
-          .replace(/[-_.]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+        const existing = results.find(r => r.name.toLowerCase() === gameName!.toLowerCase());
 
-        const existing = results.find(r => r.name.toLowerCase() === gameName.toLowerCase());
         if (existing) {
           // Prefer shorter path (closer to root)
           if (fullPath.split(path.sep).length < existing.exePath.split(path.sep).length) {
