@@ -355,7 +355,8 @@ export default function LandingPage() {
                 href={
                   link === 'Github' ? 'https://github.com/AMOLOP007' : 
                   link === 'Privacy' ? '/privacy' : 
-                  link === 'Reddit' ? 'https://www.reddit.com/user/Witty-Engine-7304/comments/1t73t10/gamevault/' : '#'
+                  link === 'Reddit' ? 'https://www.reddit.com/user/Witty-Engine-7304/comments/1t73t10/gamevault/' : 
+                  link === 'Discord' ? 'https://discord.gg/BY7CVMRCVc' : '#'
                 } 
                 target={link === 'Privacy' ? undefined : '_blank'}
                 rel={link === 'Privacy' ? undefined : 'noopener noreferrer'}
