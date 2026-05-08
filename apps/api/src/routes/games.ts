@@ -376,7 +376,7 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      await hydrateGameMetadata(game.id);
+      await hydrateGameMetadata(game.id, undefined, true);
       
       // If it's a UserGame context, also sync lifetime playtime
       const userGame = await prisma.userGame.findFirst({

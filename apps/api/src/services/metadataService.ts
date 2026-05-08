@@ -39,7 +39,7 @@ async function getIGDBToken() {
   }
 }
 
-export async function hydrateGameMetadata(gameId: string, searchHint?: string) {
+export async function hydrateGameMetadata(gameId: string, searchHint?: string, force = false) {
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) return;
 
@@ -48,8 +48,8 @@ export async function hydrateGameMetadata(gameId: string, searchHint?: string) {
   // Determine if title looks like an internal code (e.g., 'b1', 'gta5_exe', etc.)
   const titleIsGarbage = game.title.length <= 4 || /^[a-zA-Z]\d*$/.test(game.title);
 
-  // Hydrate basic metadata if missing official cover or high-fidelity title
-  if ((!hasOfficialCover || game.title.length < 5 || titleIsGarbage) && RAWG_API_KEY) {
+  // Hydrate basic metadata if missing official cover or high-fidelity title or if forced
+  if ((force || !hasOfficialCover || game.title.length < 5 || titleIsGarbage) && RAWG_API_KEY) {
     console.log(`[Metadata] Fetching high-fidelity metadata for: ${game.title} (hint: ${searchHint || 'none'})`);
     try {
       let results = [];
