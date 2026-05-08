@@ -204,11 +204,11 @@ export async function scanFolder(dirPath: string): Promise<ScannedGame[]> {
   }
 
   // Fallback: no signature found — use PE inspection heuristically
-  await recursiveScan(dirPath, 0, results);
+  await recursiveScan(dirPath, 0, results, dirPath);
   return results;
 }
 
-async function recursiveScan(dir: string, depth: number, results: ScannedGame[]) {
+async function recursiveScan(dir: string, depth: number, results: ScannedGame[], rootDir: string) {
   if (depth > 6) return;
 
   try {
@@ -222,7 +222,7 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
     for (const file of files) {
       const fullPath = path.join(dir, file.name);
       if (file.isDirectory()) {
-        await recursiveScan(fullPath, depth + 1, results);
+        await recursiveScan(fullPath, depth + 1, results, rootDir);
       } else if (file.name.toLowerCase().endsWith('.exe')) {
         const stats = fs.statSync(fullPath);
         const name = file.name.toLowerCase();
@@ -239,24 +239,23 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[])
           if (inspection.confidence < 40) continue;
         }
 
-        // 1. Try config files in this dir or parent
-        let gameName = extractNameFromConfig(dir) || extractNameFromConfig(path.dirname(dir));
+        // 1. Walk up to the root dirPath to find config files
+        let gameName = null;
+        let currentExtractDir = dir;
+        while (currentExtractDir.length > 3) {
+          gameName = extractNameFromConfig(currentExtractDir);
+          if (gameName) break;
+          if (currentExtractDir.toLowerCase() === rootDir.toLowerCase()) break;
+          currentExtractDir = path.dirname(currentExtractDir);
+        }
         
-        // 2. Fallback to folder structure
+        // 2. Fallback to the root folder name
         if (!gameName) {
-          gameName = path.basename(file.name, '.exe');
-          let currentDir = dir;
-          const skipFolders = ['binaries', 'win64', 'win32', 'shipping', 'bin', 'x64', 'x86', 'engine'];
-          if (skipFolders.some(s => currentDir.toLowerCase().includes(`\\${s}\\`) || currentDir.toLowerCase().endsWith(`\\${s}`))) {
-            while (
-              currentDir.length > 3 &&
-              skipFolders.some(s => path.basename(currentDir).toLowerCase() === s)
-            ) {
-              currentDir = path.dirname(currentDir);
-            }
-            gameName = path.basename(currentDir);
-          } else if (depth === 0) {
-            gameName = path.basename(dir);
+          gameName = path.basename(rootDir);
+          
+          // Additional fallback: if rootDir was somehow just "b1", use the parent
+          if (/^[a-zA-Z]\d*$/.test(gameName) && path.dirname(rootDir).length > 3) {
+            gameName = path.basename(path.dirname(rootDir));
           }
 
           gameName = gameName
