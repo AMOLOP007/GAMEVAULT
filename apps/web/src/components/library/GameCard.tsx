@@ -88,6 +88,32 @@ const GameCard = memo(function GameCard({
     }
   };
 
+  const handleSetExe = async () => {
+    try {
+      if ((window as any).gameVault) {
+        const result = await (window as any).gameVault.setGameExe(id);
+        if (result?.success) {
+          // Show success toast or reload
+          window.location.reload();
+        }
+      } else {
+        alert("Only available in Desktop App");
+      }
+    } catch (err) {
+      console.error('Set EXE failed:', err);
+    }
+  };
+
+  const handleFixMetadata = async () => {
+    try {
+      // Clear cover so hydration is forced, then re-hydrate
+      await api.post(`/api/games/${id}/sync-metadata`);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      console.error('Metadata fix failed:', err);
+    }
+  };
+
   const menuItems = [
     { 
       label: 'Launch Game', 
@@ -107,17 +133,19 @@ const GameCard = memo(function GameCard({
       onClick: handleManualLaunch 
     },
     { 
+      label: 'Update EXE Path', 
+      icon: <Settings className="w-4 h-4" />, 
+      onClick: handleSetExe,
+    },
+    { 
+      label: 'Fix Game Name / Art', 
+      icon: <RefreshCw className="w-4 h-4" />, 
+      onClick: handleFixMetadata,
+    },
+    { 
       label: 'View Analytics', 
       icon: <BarChart3 className="w-4 h-4" />, 
       onClick: () => setShowAnalytics(true) 
-    },
-    { 
-      label: 'Sync Metadata', 
-      icon: <RefreshCw className="w-4 h-4" />, 
-      onClick: async () => {
-        await api.post(`/api/games/${id}/sync-metadata`);
-        window.location.reload();
-      } 
     },
     { 
       label: isFavorite ? 'Remove Favorite' : 'Mark as Favorite', 
@@ -126,11 +154,6 @@ const GameCard = memo(function GameCard({
         await api.patch(`/api/games/${id}`, { isFavorite: !isFavorite });
         window.location.reload(); 
       } 
-    },
-    { 
-      label: 'Game Settings', 
-      icon: <Settings className="w-4 h-4" />, 
-      onClick: () => {} 
     },
     { 
       label: 'Remove from Vault', 

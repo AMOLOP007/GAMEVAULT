@@ -113,17 +113,37 @@ async function autoScanAndSync(userId: string) {
     log.info(`[AutoScan] Found ${discovered.length} games. Syncing...`);
     
     for (const game of discovered) {
+      // Derive best title: prefer the installPath folder name over the exe-derived name
+      // This fixes cases like 'b1.exe' → 'Black Myth Wukong' (from D:/BMW/Black Myth Wukong)
+      const folderName = game.installPath
+        ? path.basename(game.installPath)
+            .replace(/[-_.]/g, ' ')
+            .replace(/v\d+(\.\d+)*/gi, '')
+            .replace(/repack|dodi|fitgirl|crack|multi\d+|incldlc/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+        : null;
+      
+      // Use folder name if: (a) game name looks like an internal code, OR (b) folder name is clearly better
+      const isInternalCode = (name: string) =>
+        name.length <= 4 || (/^[a-zA-Z]\d*$/.test(name)) || name.toLowerCase() === name;
+      
+      const canonicalName = (folderName && isInternalCode(game.name) && folderName.length > 4)
+        ? folderName
+        : game.name;
+
       const g = await (prisma as any).game.upsert({
         where: { exePath: game.exePath },
         update: {
-          title: game.name,
+          // Always update title if current one is a garbage internal code
+          title: canonicalName,
           launchUri: game.launchUri,
           steamAppId: game.steamAppId,
           epicAppId: game.epicAppId,
           gogAppId: game.gogAppId,
         },
         create: {
-          title: game.name,
+          title: canonicalName,
           exePath: game.exePath,
           source: game.source,
           launchUri: game.launchUri,
@@ -137,7 +157,7 @@ async function autoScanAndSync(userId: string) {
       await (prisma as any).userGame.upsert({
         where: { userId_gameId: { userId, gameId: g.id } },
         update: {},
-        create: { userId, gameId: g.id, status: 'playing' }
+        create: { userId, gameId: g.id, status: 'backlog' }
       });
 
       // ── TRIGGER FORENSIC SYNC ──
@@ -146,17 +166,20 @@ async function autoScanAndSync(userId: string) {
         forensicSyncService.syncGame(game.steamAppId.toString(), g.id).catch(() => {});
       }
 
-      // SYNC TO CENTRAL API
+      // SYNC TO CENTRAL API — include installPath as searchHint for better metadata
       const token = store.get('token');
       if (token) {
         axios.post(`${API_BASE_URL}/api/games`, {
-          title: game.name,
+          title: canonicalName,
           exePath: game.exePath,
           source: game.source,
           launchUri: game.launchUri,
           steamAppId: game.steamAppId,
           epicAppId: game.epicAppId,
           gogAppId: game.gogAppId,
+          // Pass folder name as a metadata search hint
+          searchHint: folderName || canonicalName,
+          installPath: game.installPath,
         }, {
           headers: { Authorization: `Bearer ${token}` }
         }).catch(() => {});

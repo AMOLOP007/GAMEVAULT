@@ -64,9 +64,17 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     const { 
       title, exePath, processName, coverUrl, iconUrl,
       steamAppId, epicAppId, gogAppId, source, launchUri,
-      totalPlaytime, playtime2Weeks
+      totalPlaytime, playtime2Weeks,
+      searchHint, installPath  // searchHint = folder name for metadata lookup
     } = request.body;
     const userId = request.user.sub;
+
+    // Determine if title looks like a cryptic internal code
+    const titleIsGarbage = title && (title.length <= 4 || /^[a-zA-Z]\d*$/.test(title));
+    // The best name to use: prefer searchHint if title is garbage
+    const bestTitle = (titleIsGarbage && searchHint && searchHint.length > 4) ? searchHint : title;
+    // The hint to pass to metadata: always send folder name if available
+    const metadataHint = searchHint || installPath ? (installPath ? require('path').basename(installPath) : searchHint) : undefined;
 
     // Use a transaction or a very robust check to handle concurrency
     let game = await prisma.game.findFirst({
@@ -74,7 +82,8 @@ export default async function gameRoutes(fastify: FastifyInstance) {
         OR: [
           ...(steamAppId ? [{ steamAppId: Number(steamAppId) }] : []),
           ...(epicAppId ? [{ epicAppId }] : []),
-          { title }
+          ...(exePath ? [{ exePath }] : []),
+          { title: bestTitle }
         ]
       }
     });
@@ -83,7 +92,7 @@ export default async function gameRoutes(fastify: FastifyInstance) {
       try {
         game = await prisma.game.create({
           data: { 
-            title, exePath, processName, 
+            title: bestTitle, exePath, processName, 
             coverUrl: coverUrl || iconUrl,
             steamAppId: steamAppId ? Number(steamAppId) : null, 
             epicAppId, gogAppId, source, launchUri
@@ -95,16 +104,16 @@ export default async function gameRoutes(fastify: FastifyInstance) {
           game = await prisma.game.findFirst({ 
             where: { 
               OR: [
-                { title },
+                { title: bestTitle },
                 ...(exePath ? [{ exePath }] : [])
               ]
             } 
           });
           
-          if (game && game.title !== title) {
+          if (game && game.title !== bestTitle) {
             game = await prisma.game.update({
               where: { id: game.id },
-              data: { title }
+              data: { title: bestTitle }
             });
           }
         } else {
@@ -112,15 +121,24 @@ export default async function gameRoutes(fastify: FastifyInstance) {
           throw err;
         }
       }
+    } else {
+      // Game already exists — upgrade its title if current one is garbage
+      const existingTitleIsGarbage = game.title.length <= 4 || /^[a-zA-Z]\d*$/.test(game.title);
+      if (existingTitleIsGarbage && bestTitle && bestTitle.length > game.title.length) {
+        game = await prisma.game.update({
+          where: { id: game.id },
+          data: { title: bestTitle }
+        });
+      }
     }
 
     if (!game) {
-      console.error(`[API] Failed to resolve or create game: ${title}`, { exePath, steamAppId, epicAppId });
+      console.error(`[API] Failed to resolve or create game: ${bestTitle}`, { exePath, steamAppId, epicAppId });
       throw new Error('Failed to resolve or create game');
     }
 
-    // Ensure metadata hydration is triggered (covers both new creations and P2002 resolutions)
-    hydrateGameMetadata(game.id).catch(console.error);
+    // Ensure metadata hydration is triggered with the search hint for better lookup
+    hydrateGameMetadata(game.id, metadataHint).catch(console.error);
 
     // Add to user library using upsert to handle concurrency
     const { getActiveActivity } = await import('../services/playtimeService.js');

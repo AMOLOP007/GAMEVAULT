@@ -39,26 +39,32 @@ async function getIGDBToken() {
   }
 }
 
-export async function hydrateGameMetadata(gameId: string) {
+export async function hydrateGameMetadata(gameId: string, searchHint?: string) {
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) return;
 
   const hasOfficialCover = game.coverUrl && !game.coverUrl.startsWith('data:');
+  
+  // Determine if title looks like an internal code (e.g., 'b1', 'gta5_exe', etc.)
+  const titleIsGarbage = game.title.length <= 4 || /^[a-zA-Z]\d*$/.test(game.title);
 
   // Hydrate basic metadata if missing official cover or high-fidelity title
-  if ((!hasOfficialCover || game.title.length < 5) && RAWG_API_KEY) {
-    console.log(`[Metadata] Fetching high-fidelity metadata for: ${game.title}`);
+  if ((!hasOfficialCover || game.title.length < 5 || titleIsGarbage) && RAWG_API_KEY) {
+    console.log(`[Metadata] Fetching high-fidelity metadata for: ${game.title} (hint: ${searchHint || 'none'})`);
     try {
       let results = [];
+      let foundViaHint = false;
       
-      // Try 1: Original Title
-      const response = await axios.get(`https://api.rawg.io/api/games`, {
-        params: { key: RAWG_API_KEY, search: game.title, page_size: 1 }
-      });
-      results = response.data.results || [];
+      // Try 1: Original Title (skip if it's a garbage internal code)
+      if (!titleIsGarbage) {
+        const response = await axios.get(`https://api.rawg.io/api/games`, {
+          params: { key: RAWG_API_KEY, search: game.title, page_size: 3 }
+        });
+        results = response.data.results || [];
+      }
 
       // Try 2: Cleaned Title (strip "Enhanced Edition", "Director's Cut", etc.)
-      if (results.length === 0) {
+      if (results.length === 0 && !titleIsGarbage) {
         const cleanedTitle = game.title
           .replace(/Enhanced Edition/gi, '')
           .replace(/Director'?s Cut/gi, '')
@@ -67,13 +73,34 @@ export async function hydrateGameMetadata(gameId: string) {
           .replace(/Game of the Year/gi, '')
           .trim();
         
-        if (cleanedTitle !== game.title) {
+        if (cleanedTitle !== game.title && cleanedTitle.length > 2) {
           console.log(`[Metadata] Retrying with cleaned title: ${cleanedTitle}`);
           const retryResponse = await axios.get(`https://api.rawg.io/api/games`, {
-            params: { key: RAWG_API_KEY, search: cleanedTitle, page_size: 1 }
+            params: { key: RAWG_API_KEY, search: cleanedTitle, page_size: 3 }
           });
           results = retryResponse.data.results || [];
         }
+      }
+
+      // Try 3: Use installPath folder name / searchHint (for cryptic exe names like 'b1')
+      if (results.length === 0 && searchHint && searchHint.length > 2) {
+        console.log(`[Metadata] Retrying with search hint (folder name): ${searchHint}`);
+        const hintResponse = await axios.get(`https://api.rawg.io/api/games`, {
+          params: { key: RAWG_API_KEY, search: searchHint, page_size: 3 }
+        });
+        results = hintResponse.data.results || [];
+        if (results.length > 0) foundViaHint = true;
+      }
+
+      // Try 4: Fuzzy - take only first 3 words of the search hint
+      if (results.length === 0 && searchHint && searchHint.split(' ').length > 3) {
+        const shortHint = searchHint.split(' ').slice(0, 3).join(' ');
+        console.log(`[Metadata] Retrying with short hint: ${shortHint}`);
+        const shortResponse = await axios.get(`https://api.rawg.io/api/games`, {
+          params: { key: RAWG_API_KEY, search: shortHint, page_size: 3 }
+        });
+        results = shortResponse.data.results || [];
+        if (results.length > 0) foundViaHint = true;
       }
 
       if (results.length > 0) {
@@ -81,7 +108,8 @@ export async function hydrateGameMetadata(gameId: string) {
         await (prisma as any).game.update({
           where: { id: gameId },
           data: {
-            title: result.name,
+            // Only update title if it's garbage or we found via hint
+            title: (titleIsGarbage || foundViaHint) ? result.name : (result.name || game.title),
             coverUrl: result.background_image,
             genre: result.genres?.map((g: any) => g.name).join(', ') || 'Unknown',
             description: result.description_raw || game.description || '',
@@ -89,9 +117,9 @@ export async function hydrateGameMetadata(gameId: string) {
             rawgId: result.id.toString()
           }
         });
-        console.log(`[Metadata] Successfully hydrated: ${game.title}`);
+        console.log(`[Metadata] Successfully hydrated: ${game.title} → ${result.name}`);
       } else {
-        console.warn(`[Metadata] No results found for: ${game.title}`);
+        console.warn(`[Metadata] No results found for: ${game.title} (hint: ${searchHint || 'none'})`);
       }
     } catch (err: any) {
       console.error(`[Metadata] Failed to hydrate ${game.title}: ${err.message}`);
@@ -373,30 +401,54 @@ async function fetchFromCommunity(gameId: string): Promise<AchievementData[] | n
 }
 
 export async function hydrateAllMissingMetadata() {
+  // Hydrate games that: (a) have no cover, OR (b) have a garbage title (internal code like 'b1')
   const games = await prisma.game.findMany({
-    where: { coverUrl: null }
+    where: {
+      OR: [
+        { coverUrl: null },
+        { title: { equals: '' } },
+        // Short titles <= 4 chars are almost certainly internal exe names
+        // We can't do length check in Prisma, so we'll filter client-side
+      ]
+    }
   });
 
-  if (games.length === 0) return;
+  // Also get all games and filter for garbage titles client-side
+  const allGames = await prisma.game.findMany();
+  const garbageGames = allGames.filter(g => 
+    (g.title.length <= 4 || /^[a-zA-Z]\d*$/.test(g.title)) && 
+    !games.find(x => x.id === g.id)
+  );
 
-  console.log(`[Metadata] Bulk hydrating ${games.length} games in background (max 3 concurrent)...`);
+  const toHydrate = [...games, ...garbageGames];
+
+  if (toHydrate.length === 0) return;
+
+  console.log(`[Metadata] Bulk hydrating ${toHydrate.length} games (${garbageGames.length} with garbage titles)...`);
 
   // PERF: Limit to 3 concurrent hydrations to avoid spiking CPU/network on startup.
-  // Each hydrateGameMetadata call makes multiple HTTP requests and DB writes.
-  // Unbounded parallelism was crashing low-end machines on first library load.
   const { default: pLimit } = await import('p-limit');
   const limit = pLimit(3);
 
-  const tasks = games.map(game =>
+  const tasks = toHydrate.map(game =>
     limit(async () => {
-      await hydrateGameMetadata(game.id).catch(err =>
+      // Derive hint from exePath folder
+      const path = await import('path');
+      const hint = game.exePath ? path.basename(path.dirname(game.exePath)) : undefined;
+      
+      // If title is garbage, clear cover to force full re-hydration
+      if (game.title.length <= 4 || /^[a-zA-Z]\d*$/.test(game.title)) {
+        await prisma.game.update({ where: { id: game.id }, data: { coverUrl: null, rawgId: null } }).catch(() => {});
+      }
+      
+      await hydrateGameMetadata(game.id, hint).catch(err =>
         console.warn(`[Metadata] Hydration failed for ${game.title}: ${err.message}`)
       );
       // Small delay between items to stay under RAWG's rate limit
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
     })
   );
 
   await Promise.allSettled(tasks);
-  console.log(`[Metadata] Bulk hydration complete for ${games.length} games`);
+  console.log(`[Metadata] Bulk hydration complete for ${toHydrate.length} games`);
 }
