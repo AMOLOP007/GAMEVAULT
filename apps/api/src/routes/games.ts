@@ -376,7 +376,22 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      await hydrateGameMetadata(game.id, undefined, true);
+      let searchHint = undefined;
+      if (game.exePath) {
+        const parts = game.exePath.replace(/\\/g, '/').split('/');
+        let folderIndex = parts.length - 2; // Parent folder of the exe
+        while (folderIndex >= 0) {
+          const folderName = parts[folderIndex];
+          // Skip known generic engine/binaries folders and very short names
+          if (folderName.length > 2 && !['bin', 'win64', 'win32', 'binaries', 'release', 'shipping', 'x64', 'x86'].includes(folderName.toLowerCase())) {
+            searchHint = folderName;
+            break;
+          }
+          folderIndex--;
+        }
+      }
+
+      await hydrateGameMetadata(game.id, searchHint, true);
       
       // If it's a UserGame context, also sync lifetime playtime
       const userGame = await prisma.userGame.findFirst({

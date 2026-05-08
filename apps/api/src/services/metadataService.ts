@@ -55,8 +55,18 @@ export async function hydrateGameMetadata(gameId: string, searchHint?: string, f
       let results = [];
       let foundViaHint = false;
       
-      // Try 1: Original Title (skip if it's a garbage internal code)
-      if (!titleIsGarbage) {
+      // Try 0: Use searchHint first if forced and available (e.g. manual fix with folder hint)
+      if (force && searchHint && searchHint.length > 2) {
+        console.log(`[Metadata] Forcing search with hint: ${searchHint}`);
+        const hintResponse = await axios.get(`https://api.rawg.io/api/games`, {
+          params: { key: RAWG_API_KEY, search: searchHint, page_size: 3 }
+        });
+        results = hintResponse.data.results || [];
+        if (results.length > 0) foundViaHint = true;
+      }
+      
+      // Try 1: Original Title (skip if it's a garbage internal code or if we already found results)
+      if (results.length === 0 && !titleIsGarbage) {
         const response = await axios.get(`https://api.rawg.io/api/games`, {
           params: { key: RAWG_API_KEY, search: game.title, page_size: 3 }
         });
