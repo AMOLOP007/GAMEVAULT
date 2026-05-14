@@ -114,17 +114,20 @@ export class AchievementWatcher {
     }, 1000);
   }
 
+  private debounceTimer: NodeJS.Timeout | null = null;
+
   private triggerChange() {
-    const now = Date.now();
-    // Debounce: 400ms
-    if (now - this.lastChangeTime > 400) {
-      this.lastChangeTime = now;
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+    
+    // Aggressive debounce: wait 1.5 seconds after the LAST change event before firing
+    this.debounceTimer = setTimeout(() => {
+      log.info(`[AchWatcher] Firing debounced change event.`);
       if (this.onChangeCallback) {
         this.onChangeCallback();
       }
-    } else {
-      log.info(`[AchWatcher] Change ignored due to debounce.`);
-    }
+    }, 1500);
   }
 
   stop(): void {
@@ -143,6 +146,11 @@ export class AchievementWatcher {
     if (this.fallbackTimer) {
       clearTimeout(this.fallbackTimer);
       this.fallbackTimer = null;
+    }
+    
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
     
     this.onChangeCallback = null;

@@ -3,8 +3,6 @@
 <head>
   <style>
     /* PERF: No CDN font loading during gaming — use local system fonts */
-    /* Segoe UI (Windows 10/11), then system-ui fallbacks */
-
     :root {
       --gold:      #F5C518;
       --silver:    #C0C0C0;
@@ -12,6 +10,7 @@
       --platinum:  #E5E4E2;
       --steam:     #1b9bed;
       --epic:      #2e7ed1;
+      --gv:        #8b5cf6;
       --accent:    var(--gold);
       --accent-rgb: 245, 197, 24;
     }
@@ -20,341 +19,369 @@
 
     body {
       margin: 0;
+      padding: 0;
       overflow: hidden;
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      /* Card: 380px wide × 100px tall (enough for title + desc + meta row) */
-      height: 110px;
+      width: 100vw;
+      height: 100vh;
+      background: transparent !important;
+      pointer-events: none; /* Let clicks pass through */
+    }
+
+    /* ── Standard Trophy (Top-Right Slide In) ────────────────────────────── */
+    #standard-container {
+      position: absolute;
+      top: 20px;
+      right: 20px;
       width: 400px;
+      height: 120px;
       display: flex;
       align-items: flex-start;
       justify-content: flex-end;
-      padding: 8px;
+      z-index: 100;
     }
 
-    /* ── Card Container ──────────────────────────────────────────────────── */
-    .trophy-container {
-      position: relative;
-      width: 375px;
-      height: 96px;
-      perspective: 1200px;
-    }
-
-    .trophy-card {
+    .std-card {
       width: 100%;
-      height: 100%;
-      background: rgba(8, 8, 18, 0.92);
-      backdrop-filter: blur(20px) saturate(180%);
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.09);
+      height: 90px;
+      background: rgba(8, 8, 18, 0.95);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       align-items: center;
-      padding: 0 14px;
-      transform: translateX(115%) rotateY(18deg) scale(0.95);
-      transition: transform 0.65s cubic-bezier(0.19, 1, 0.22, 1),
-                  opacity  0.65s cubic-bezier(0.19, 1, 0.22, 1);
+      padding: 0 16px;
+      transform: translateX(120%);
       opacity: 0;
-      box-shadow:
-        0 16px 40px rgba(0, 0, 0, 0.7),
-        0 0 0 1px rgba(255,255,255,0.04),
-        0 0 24px rgba(var(--accent-rgb), 0.12);
-      overflow: hidden;
+      transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.6s;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(var(--accent-rgb), 0.15);
       position: relative;
+      overflow: hidden;
     }
 
-    .trophy-card.show {
-      transform: translateX(0) rotateY(0deg) scale(1);
+    .std-card.show {
+      transform: translateX(0);
       opacity: 1;
     }
 
-    /* Animated top-edge glow bar */
-    .trophy-card::before {
-      content: '';
+    /* ── Cinematic Trophy (Full Screen Center) ───────────────────────────── */
+    #cinematic-container {
       position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(var(--accent-rgb), 0.7) 30%,
-        rgba(var(--accent-rgb), 1)   50%,
-        rgba(var(--accent-rgb), 0.7) 70%,
-        transparent 100%
-      );
-      border-radius: 14px 14px 0 0;
-    }
-
-    /* Shimmer Sweep */
-    .shimmer {
-      position: absolute;
-      top: 0; left: -100%;
-      width: 40%;
-      height: 100%;
-      background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(255,255,255,0.06),
-        rgba(255,255,255,0.18),
-        rgba(255,255,255,0.06),
-        transparent
-      );
-      transform: skewX(-20deg);
-      pointer-events: none;
-      z-index: 10;
-    }
-    .shimmer.sweep {
-      animation: shimmer-sweep 1.4s ease-in-out forwards;
-    }
-    @keyframes shimmer-sweep {
-      0%   { left: -100%; }
-      100% { left: 200%; }
-    }
-
-    /* ── Icon ──────────────────────────────────────────────────────────────── */
-    .icon-wrapper {
-      width: 56px;
-      height: 56px;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(var(--accent-rgb), 0.25);
+      inset: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-shrink: 0;
-      position: relative;
-      transform: scale(0.7);
-      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s;
-      overflow: hidden;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
     }
-    .trophy-card.show .icon-wrapper {
-      transform: scale(1);
+
+    #cinematic-container.show {
+      opacity: 1;
+    }
+
+    .cine-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1;
+    }
+
+    .cine-content {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transform: scale(0.8) translateY(20px);
+      opacity: 0;
+      transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .cine-content.reveal {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+    }
+
+    /* PS5 Drop Expand Animation */
+    .drop-expand {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 40px 20px rgba(255,255,255,0.8);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      z-index: 2;
+    }
+
+    .drop-expand.animate {
+      animation: drop-expand-anim 1.5s cubic-bezier(0.1, 0.8, 0.1, 1) forwards;
+    }
+
+    @keyframes drop-expand-anim {
+      0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+      20% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(200); opacity: 0; }
+    }
+
+    /* Shared Icon Styles */
+    .icon-wrapper {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(var(--accent-rgb), 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      flex-shrink: 0;
+      box-shadow: inset 0 0 15px rgba(var(--accent-rgb), 0.2);
     }
 
     .icon-img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 8px rgba(var(--accent-rgb), 0.6));
+    }
+
+    .icon-svg {
       width: 40px;
       height: 40px;
-      object-fit: contain;
-      filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.8));
-      animation: icon-float 3s ease-in-out infinite;
-    }
-    .icon-svg {
-      width: 34px;
-      height: 34px;
       fill: var(--accent);
-      filter: drop-shadow(0 0 8px rgba(var(--accent-rgb), 0.8));
-      animation: icon-float 3s ease-in-out infinite;
-    }
-    @keyframes icon-float {
-      0%, 100% { transform: translateY(0px);   }
-      50%       { transform: translateY(-3px); }
+      filter: drop-shadow(0 0 8px rgba(var(--accent-rgb), 0.6));
     }
 
-    /* Source badge (Steam / Epic / GameVault) */
     .source-badge {
       position: absolute;
-      bottom: 3px; right: 3px;
-      width: 14px; height: 14px;
-      border-radius: 4px;
+      bottom: -4px; right: -4px;
+      width: 18px; height: 18px;
+      border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 8px;
+      font-size: 9px;
       font-weight: 900;
       color: white;
-      background: rgba(0,0,0,0.7);
-      border: 1px solid rgba(255,255,255,0.2);
+      background: #000;
+      border: 1px solid rgba(255,255,255,0.3);
+      z-index: 5;
     }
 
-    /* ── Text Content ──────────────────────────────────────────────────────── */
-    .content {
-      margin-left: 12px;
+    /* Shared Text Styles */
+    .text-content {
+      margin-left: 16px;
       flex: 1;
-      min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 1px;
+      justify-content: center;
+      min-width: 0;
     }
 
-    /* Top row: platform label + "Achievement Unlocked!" */
-    .label-row {
-      display: flex;
+    .cine-content .text-content {
+      margin-left: 0;
+      margin-top: 24px;
       align-items: center;
-      gap: 6px;
     }
-    .platform-chip {
-      font-size: 9px;
+
+    .cine-content .icon-wrapper {
+      width: 140px;
+      height: 140px;
+      border-radius: 24px;
+      border-width: 2px;
+      box-shadow: 0 0 40px rgba(var(--accent-rgb), 0.4), inset 0 0 30px rgba(var(--accent-rgb), 0.2);
+    }
+
+    .cine-content .icon-img { width: 100px; height: 100px; }
+    .cine-content .icon-svg { width: 90px; height: 90px; }
+    .cine-content .source-badge { width: 28px; height: 28px; font-size: 12px; bottom: -8px; right: -8px; }
+
+    .platform-label {
+      font-size: 11px;
       font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
+      letter-spacing: 1px;
       color: var(--accent);
-      opacity: 0.85;
-      white-space: nowrap;
-    }
-    .unlocked-label {
-      font-size: 9px;
-      font-weight: 600;
-      color: rgba(255,255,255,0.4);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
+      margin-bottom: 2px;
     }
 
-    /* Achievement name */
-    .trophy-title {
-      font-size: 15px;
-      font-weight: 700;
+    .cine-content .platform-label { font-size: 16px; margin-bottom: 8px; }
+
+    .title {
+      font-size: 16px;
+      font-weight: 800;
       color: #fff;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.15;
-      letter-spacing: -0.3px;
-    }
-
-    /* Description */
-    .trophy-desc {
-      font-size: 11px;
-      color: rgba(255,255,255,0.48);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       line-height: 1.2;
     }
 
-    /* Meta row: global% + unlock time */
-    .meta-row {
+    .cine-content .title {
+      font-size: 36px;
+      font-weight: 900;
+      white-space: normal;
+      margin-bottom: 8px;
+    }
+
+    .desc {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .cine-content .desc {
+      font-size: 18px;
+      white-space: normal;
+      max-width: 600px;
+    }
+
+    .meta {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-top: 2px;
-    }
-    .global-pct {
-      font-size: 9px;
+      margin-top: 6px;
+      font-size: 10px;
       font-weight: 700;
-      color: rgba(255,255,255,0.35);
-      white-space: nowrap;
-    }
-    .global-pct span {
-      color: rgba(var(--accent-rgb), 0.75);
-    }
-    .unlock-time {
-      font-size: 9px;
-      color: rgba(255,255,255,0.25);
-      white-space: nowrap;
+      color: rgba(255,255,255,0.4);
     }
 
-    /* ── Progress Bar (for globalPercent) ─────────────────────────────────── */
-    .pct-bar-wrapper {
-      flex: 1;
-      height: 2px;
-      background: rgba(255,255,255,0.06);
+    .cine-content .meta { font-size: 14px; margin-top: 16px; }
+
+    .pct-bar-bg {
+      width: 60px;
+      height: 3px;
+      background: rgba(255,255,255,0.1);
       border-radius: 2px;
       overflow: hidden;
-      max-width: 80px;
     }
-    .pct-bar {
+
+    .cine-content .pct-bar-bg { width: 120px; height: 4px; }
+
+    .pct-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, rgba(var(--accent-rgb),0.5), rgba(var(--accent-rgb),0.85));
-      border-radius: 2px;
+      background: var(--accent);
       width: 0%;
-      transition: width 1.2s ease 0.8s;
+      transition: width 1s ease 0.5s;
     }
-    .pct-bar.animate { width: var(--target-width); }
+
+    /* Shimmer Effect */
+    .shimmer {
+      position: absolute;
+      top: 0; left: -100%;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), rgba(255,255,255,0.3), rgba(255,255,255,0.1), transparent);
+      transform: skewX(-20deg);
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    .std-card.show .shimmer {
+      animation: sweep 1.5s ease-in-out forwards 0.3s;
+    }
+
+    @keyframes sweep {
+      0% { left: -100%; }
+      100% { left: 200%; }
+    }
 
     /* ── Particles ─────────────────────────────────────────────────────────── */
     .particle {
       position: absolute;
-      pointer-events: none;
-      background: var(--accent);
       border-radius: 50%;
-      z-index: 20;
-    }
-    @keyframes particle-fade {
-      0%   { transform: translate(0, 0) scale(1); opacity: 1; }
-      100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+      background: var(--accent);
+      pointer-events: none;
+      z-index: 50;
     }
 
-    /* ── Variant: First Launch ─────────────────────────────────────────────── */
-    .variant-celebration {
-      border: 1px solid rgba(255, 215, 0, 0.35);
-      background: linear-gradient(135deg, rgba(18, 18, 28, 0.94), rgba(38, 28, 8, 0.94));
+    /* ── Xbox Holographic Confetti Rain ────────────────────────────────────── */
+    .confetti {
+      position: absolute;
+      width: 10px; height: 20px;
+      background: var(--c);
+      top: -20px;
+      z-index: 5;
+      animation: confetti-fall var(--dur) linear forwards;
     }
 
-    /* ── Variant: New User Welcome ─────────────────────────────────────────── */
-    .variant-new-user {
-      border: 1px solid rgba(0, 255, 255, 0.4);
-      background: linear-gradient(135deg, rgba(8, 24, 32, 0.94), rgba(0, 40, 40, 0.94));
-      box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+    @keyframes confetti-fall {
+      to { transform: translateY(110vh) rotate(720deg); }
     }
 
-    /* ── Variant: Platinum / Grand Master ─────────────────────────────────── */
-    .variant-grand-master {
-      border: 1px solid rgba(255,255,255,0.4);
-      background: linear-gradient(135deg,
-        rgba(10, 18, 40, 0.96) 0%,
-        rgba(40, 10, 40, 0.96) 50%,
-        rgba(10, 40, 22, 0.96) 100%
-      );
-      background-size: 400% 400%;
-      animation: rainbow-bg 8s ease infinite;
-      box-shadow: 0 0 40px rgba(255,255,255,0.2), inset 0 0 20px rgba(255,255,255,0.05);
+    .holographic {
+      background: linear-gradient(135deg, rgba(30,30,40,0.9), rgba(10,10,20,0.9)) !important;
+      border: 1px solid rgba(255,255,255,0.5) !important;
+      position: relative;
     }
-    @keyframes rainbow-bg {
-      0%,100% { background-position: 0% 50%; }
-      50%     { background-position: 100% 50%; }
-    }
-
-    /* ── Rare Achievement (<5% players) pulse border ──────────────────────── */
-    .variant-rare::after {
+    
+    .holographic::before {
       content: '';
       position: absolute;
-      inset: -1px;
-      border-radius: 14px;
-      padding: 1px;
-      background: linear-gradient(90deg,
-        transparent,
-        rgba(var(--accent-rgb), 0.5),
-        transparent
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(45deg, 
+        rgba(255,0,0,0.1), rgba(255,165,0,0.1), rgba(255,255,0,0.1), 
+        rgba(0,128,0,0.1), rgba(0,0,255,0.1), rgba(75,0,130,0.1), rgba(238,130,238,0.1)
       );
-      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      mask-composite: xor;
-      -webkit-mask-composite: destination-out;
-      animation: rare-pulse 1.5s ease-in-out infinite;
+      background-size: 400% 400%;
+      animation: holo-bg 6s ease infinite;
+      z-index: -1;
+      pointer-events: none;
     }
-    @keyframes rare-pulse {
-      0%,100% { opacity: 0.4; }
-      50%     { opacity: 1; }
+
+    @keyframes holo-bg {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
     }
   </style>
 </head>
 <body>
-  <div class="trophy-container">
-    <div id="card" class="trophy-card">
-      <div class="shimmer" id="shimmer"></div>
 
-      <!-- Icon -->
-      <div class="icon-wrapper" id="icon-box">
-        <!-- Replaced dynamically by JS -->
-        <svg class="icon-svg" id="svg-icon" viewBox="0 0 24 24">
-          <path d="M18,2H6V4H18V2M18,7V9C18,12.31 15.31,15 12,15C8.69,15 6,12.31 6,9V7C4.89,7 4,7.89 4,9V10C4,11.11 4.89,12 6,12V13.88C6,15.39 7.05,16.65 8.47,16.94L7,20H5V22H19V20H17L15.53,16.94C16.95,16.65 18,15.39 18,13.88V12C19.11,12 20,11.11 20,10V9C20,7.89 19.11,7 18,7M12,13C14.21,13 16,11.21 16,9V4H8V9C8,11.21 9.79,13 12,13Z"/>
-        </svg>
-        <div class="source-badge" id="source-badge">GV</div>
+  <!-- Standard Top-Right Trophy -->
+  <div id="standard-container">
+    <div id="std-card" class="std-card">
+      <div class="shimmer"></div>
+      <div class="icon-wrapper" id="std-icon-box">
+        <svg class="icon-svg" id="std-svg" viewBox="0 0 24 24"><path d="M18,2H6V4H18V2M18,7V9C18,12.31 15.31,15 12,15C8.69,15 6,12.31 6,9V7C4.89,7 4,7.89 4,9V10C4,11.11 4.89,12 6,12V13.88C6,15.39 7.05,16.65 8.47,16.94L7,20H5V22H19V20H17L15.53,16.94C16.95,16.65 18,15.39 18,13.88V12C19.11,12 20,11.11 20,10V9C20,7.89 19.11,7 18,7M12,13C14.21,13 16,11.21 16,9V4H8V9C8,11.21 9.79,13 12,13Z"/></svg>
+        <div class="source-badge" id="std-badge">GV</div>
       </div>
-
-      <!-- Text -->
-      <div class="content">
-        <div class="label-row">
-          <span class="platform-chip" id="platform-chip">GameVault</span>
-          <span class="unlocked-label">Achievement Unlocked!</span>
+      <div class="text-content">
+        <div class="platform-label" id="std-platform">GameVault</div>
+        <div class="title" id="std-title">Achievement Unlocked</div>
+        <div class="desc" id="std-desc">Description goes here</div>
+        <div class="meta" id="std-meta" style="display:none">
+          <span id="std-pct-val">10%</span>
+          <div class="pct-bar-bg"><div class="pct-bar-fill" id="std-pct-fill"></div></div>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <div class="trophy-title" id="title">Night City Legend</div>
-        <div class="trophy-desc" id="desc">Complete all gigs in Watson.</div>
-
-        <div class="meta-row">
-          <div class="global-pct" id="global-pct" style="display:none">
-            <span id="pct-value">29.8%</span> of players
-          </div>
-          <div class="pct-bar-wrapper" id="pct-bar-wrap" style="display:none">
-            <div class="pct-bar" id="pct-bar"></div>
-          </div>
-          <div class="unlock-time" id="unlock-time"></div>
+  <!-- Cinematic Full-Screen Trophy -->
+  <div id="cinematic-container">
+    <div class="cine-overlay"></div>
+    <div class="drop-expand" id="cine-drop"></div>
+    
+    <div class="cine-content" id="cine-content">
+      <div class="icon-wrapper" id="cine-icon-box">
+        <svg class="icon-svg" id="cine-svg" viewBox="0 0 24 24"><path d="M18,2H6V4H18V2M18,7V9C18,12.31 15.31,15 12,15C8.69,15 6,12.31 6,9V7C4.89,7 4,7.89 4,9V10C4,11.11 4.89,12 6,12V13.88C6,15.39 7.05,16.65 8.47,16.94L7,20H5V22H19V20H17L15.53,16.94C16.95,16.65 18,15.39 18,13.88V12C19.11,12 20,11.11 20,10V9C20,7.89 19.11,7 18,7M12,13C14.21,13 16,11.21 16,9V4H8V9C8,11.21 9.79,13 12,13Z"/></svg>
+        <div class="source-badge" id="cine-badge">GV</div>
+      </div>
+      <div class="text-content">
+        <div class="platform-label" id="cine-platform">GameVault</div>
+        <div class="title" id="cine-title">Achievement Unlocked</div>
+        <div class="desc" id="cine-desc">Description goes here</div>
+        <div class="meta" id="cine-meta" style="display:none">
+          <span id="cine-pct-val" style="color: var(--accent);">10%</span>
+          <span>of players have this</span>
+          <div class="pct-bar-bg"><div class="pct-bar-fill" id="cine-pct-fill"></div></div>
         </div>
       </div>
     </div>
@@ -363,218 +390,221 @@
   <script>
     'use strict';
 
-    const card       = document.getElementById('card');
-    const shimmer    = document.getElementById('shimmer');
-    const titleEl    = document.getElementById('title');
-    const descEl     = document.getElementById('desc');
-    const chipEl     = document.getElementById('platform-chip');
-    const badgeEl    = document.getElementById('source-badge');
-    const iconBox    = document.getElementById('icon-box');
-    const svgIcon    = document.getElementById('svg-icon');
-    const globalPct  = document.getElementById('global-pct');
-    const pctValue   = document.getElementById('pct-value');
-    const pctBarWrap = document.getElementById('pct-bar-wrap');
-    const pctBar     = document.getElementById('pct-bar');
-    const timeEl     = document.getElementById('unlock-time');
+    function hexToRgb(hex) {
+      const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return r ? { r: parseInt(r[1],16), g: parseInt(r[2],16), b: parseInt(r[3],16) } : { r: 245, g: 197, b: 24 };
+    }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    function setAccent(hexColor) {
-      document.documentElement.style.setProperty('--accent', hexColor);
-      const rgb = hexToRgb(hexColor);
+    function setAccent(color) {
+      document.documentElement.style.setProperty('--accent', color);
+      const rgb = hexToRgb(color);
       document.documentElement.style.setProperty('--accent-rgb', `${rgb.r},${rgb.g},${rgb.b}`);
     }
 
-    function getTrophyColor(type, source) {
-      // Source-based defaults
-      if (source === 'steam')     return '#1b9bed';
-      if (source === 'epic')      return '#2e7ed1';
-      if (source === 'goldberg' || source === 'codex' ||
-          source === 'smartsteam'|| source === 'ali213' ||
-          source === 'creamapi' || source === 'generic') {
-        return '#F5C518'; // Gold — cracked game achievement
-      }
-      switch (type?.toLowerCase()) {
-        case 'gold':        return '#F5C518';
-        case 'silver':      return '#C0C0C0';
-        case 'bronze':      return '#CD7F32';
-        case 'platinum':    return '#E5E4E2';
-        case 'grand_master':return '#FFFFFF';
-        case 'first_launch':return '#FFD700';
-        case 'new_user_welcome': return '#00FFFF';
-        default:            return '#F5C518';
+    function getColor(type, source) {
+      if (source === 'steam') return '#1b9bed';
+      if (source === 'epic') return '#2e7ed1';
+      if (['goldberg','codex','smartsteam','ali213','creamapi','generic'].includes(source)) return '#F5C518';
+      
+      switch(type?.toLowerCase()) {
+        case 'platinum': return '#E5E4E2';
+        case 'silver': return '#C0C0C0';
+        case 'bronze': return '#CD7F32';
+        case 'new_user_welcome': return '#8b5cf6';
+        default: return '#F5C518'; // Gold
       }
     }
 
-    function getPlatformLabel(source, type) {
-      switch (source) {
-        case 'steam':       return '🔵 Steam';
-        case 'epic':        return '🟣 Epic Games';
-        case 'goldberg':    return '⚡ GameVault';
-        case 'codex':       return '⚡ GameVault';
-        case 'smartsteam':  return '⚡ GameVault';
-        case 'ali213':      return '⚡ GameVault';
-        case 'creamapi':    return '⚡ GameVault';
-        case 'generic':     return '⚡ GameVault';
-        case 'first_launch':return '🚀 GameVault';
-        default:            return '🏆 GameVault';
-      }
+    function getBadge(source) {
+      if (source === 'steam') return 'ST';
+      if (source === 'epic') return 'EG';
+      return 'GV';
     }
 
-    function getSourceBadge(source) {
-      switch (source) {
-        case 'steam':    return 'ST';
-        case 'epic':     return 'EG';
-        default:         return 'GV';
-      }
+    function getPlatform(source, type, gameTitle) {
+      let prefix = '🏆 GameVault';
+      if (source === 'steam') prefix = '🔵 Steam';
+      else if (source === 'epic') prefix = '🟣 Epic Games';
+      else if (type === 'new_user_welcome' || type === 'first_launch') prefix = '🚀 GameVault Welcome';
+      else if (['goldberg','codex','smartsteam','ali213','creamapi','generic'].includes(source)) prefix = '⚡ GameVault Tracker';
+      
+      return gameTitle ? `${prefix} — ${gameTitle}` : prefix;
     }
 
-    function formatTime(ts) {
-      if (!ts) return '';
-      const d = new Date(ts);
-      if (isNaN(d.getTime())) return '';
-      return d.toLocaleString(undefined, {
-        month: 'short', day: 'numeric', year: 'numeric',
-        hour: 'numeric', minute: '2-digit'
-      });
-    }
-
-    function hexToRgb(hex) {
-      const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return r
-        ? { r: parseInt(r[1],16), g: parseInt(r[2],16), b: parseInt(r[3],16) }
-        : { r: 245, g: 197, b: 24 };
-    }
-
-    function createParticles(type) {
-      const rect = iconBox.getBoundingClientRect();
-      const cx = rect.width / 2;
-      const cy = rect.height / 2;
-      const count = type === 'new_user_welcome' ? 50 : 20;
-      for (let i = 0; i < count; i++) {
-        const p = document.createElement('div');
-        p.className = 'particle';
-        const size = Math.random() * 4 + 2;
-        p.style.cssText = `width:${size}px;height:${size}px;`;
-        const angle    = Math.random() * Math.PI * 2;
-        const velocity = type === 'new_user_welcome' ? (60 + Math.random() * 80) : (40 + Math.random() * 60);
-        p.style.setProperty('--tx', (Math.cos(angle) * velocity) + 'px');
-        p.style.setProperty('--ty', (Math.sin(angle) * velocity) + 'px');
-        p.style.left = cx + 'px';
-        p.style.top  = cy + 'px';
-        p.style.animation = `particle-fade ${0.6 + Math.random() * 0.4}s ease-out forwards`;
-        iconBox.appendChild(p);
-        setTimeout(() => p.remove(), 1200);
-      }
-    }
-
-    // ── Audio Synthesis (Zero-Asset, Low-Resource Chime) ─────────────────────
-    function playSound() {
+    function playSound(type) {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        
-        osc.type = 'sine';
-        // A pleasant two-tone chime
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
-        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1); // A6
-        
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-        
         osc.connect(gain);
         gain.connect(ctx.destination);
         
-        osc.start();
-        osc.stop(ctx.currentTime + 0.8);
-      } catch (e) {
-        console.error('Failed to play synthesized sound:', e);
+        if (type === 'cinematic') {
+          // Deep PS5-style bass hum + chime
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(220, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2);
+          osc.start(); osc.stop(ctx.currentTime + 2);
+        } else {
+          // Standard Xbox/Steam pop
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+          osc.start(); osc.stop(ctx.currentTime + 0.8);
+        }
+      } catch (e) {}
+    }
+
+    function createParticles(x, y, color, count, container) {
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const size = Math.random() * 6 + 2;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        p.style.left = x + 'px';
+        p.style.top = y + 'px';
+        p.style.background = color;
+        
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = 50 + Math.random() * 100;
+        const tx = Math.cos(angle) * velocity;
+        const ty = Math.sin(angle) * velocity;
+        
+        p.style.setProperty('--tx', tx + 'px');
+        p.style.setProperty('--ty', ty + 'px');
+        p.style.animation = `particle-fade ${0.5 + Math.random() * 0.5}s cubic-bezier(0.1, 0.8, 0.1, 1) forwards`;
+        
+        container.appendChild(p);
+        setTimeout(() => p.remove(), 1000);
       }
     }
 
-    // ── Main trophy handler ───────────────────────────────────────────────────
+    function fireConfetti() {
+      const colors = ['#F5C518', '#1b9bed', '#2e7ed1', '#8b5cf6', '#10b981', '#f43f5e'];
+      const container = document.getElementById('cinematic-container');
+      for (let i = 0; i < 100; i++) {
+        const c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.left = Math.random() * 100 + 'vw';
+        c.style.setProperty('--c', colors[Math.floor(Math.random() * colors.length)]);
+        c.style.setProperty('--dur', (2 + Math.random() * 3) + 's');
+        c.style.animationDelay = (Math.random() * 0.5) + 's';
+        container.appendChild(c);
+        setTimeout(() => c.remove(), 6000);
+      }
+    }
 
-    window.gameVault?.onTrophyShow((data) => {
-      // Play sound immediately
-      playSound();
-      // Reset state
-      card.classList.remove('show', 'variant-celebration', 'variant-grand-master', 'variant-rare');
-      shimmer.classList.remove('sweep');
-      pctBar.classList.remove('animate');
-
-      // ── Accent color
-      const color = getTrophyColor(data.type, data.source);
-      setAccent(color);
-
-      // ── Platform chip
-      chipEl.textContent = data.gameTitle
-        ? `${getPlatformLabel(data.source, data.type)} — ${data.gameTitle}`
-        : getPlatformLabel(data.source, data.type);
-
-      // ── Source badge
-      badgeEl.textContent = getSourceBadge(data.source);
-
-      // ── Icon
-      // Remove old <img> if any
-      const oldImg = iconBox.querySelector('img');
+    function setupIcon(wrapperId, svgId, url) {
+      const wrapper = document.getElementById(wrapperId);
+      const svg = document.getElementById(svgId);
+      const oldImg = wrapper.querySelector('img');
       if (oldImg) oldImg.remove();
-
-      if (data.iconUrl && data.iconUrl.startsWith('http')) {
-        // Use real achievement icon from Steam/Epic
+      
+      if (url && url.startsWith('http')) {
         const img = document.createElement('img');
         img.className = 'icon-img';
-        img.src = data.iconUrl;
-        img.alt = '';
-        img.onerror = () => { img.remove(); svgIcon.style.display = ''; };
-        svgIcon.style.display = 'none';
-        iconBox.insertBefore(img, iconBox.firstChild);
+        img.src = url;
+        img.onerror = () => { img.remove(); svg.style.display = ''; };
+        svg.style.display = 'none';
+        wrapper.insertBefore(img, wrapper.firstChild);
       } else {
-        svgIcon.style.display = '';
+        svg.style.display = '';
       }
+    }
 
-      // ── Text
-      titleEl.textContent = data.title || 'Achievement Unlocked';
-      descEl.textContent  = data.description || data.message || '';
+    // MAIN HANDLER
+    window.gameVault?.onTrophyShow((data) => {
+      console.log('Trophy data:', data);
+      
+      const isCinematic = data.type === 'new_user_welcome' || data.type === 'first_launch' || data.type === 'platinum' || data.type === 'grand_master';
+      
+      setAccent(getColor(data.type, data.source));
+      playSound(isCinematic ? 'cinematic' : 'standard');
 
-      // ── Global % (e.g. "29.8% of players have this achievement")
-      const pct = data.globalPercent;
-      if (pct != null && pct >= 0) {
-        pctValue.textContent = pct.toFixed(1) + '%';
-        globalPct.style.display  = '';
-        pctBarWrap.style.display = '';
-        pctBar.style.setProperty('--target-width', Math.min(pct, 100) + '%');
-        setTimeout(() => pctBar.classList.add('animate'), 50);
-      } else {
-        globalPct.style.display  = 'none';
-        pctBarWrap.style.display = 'none';
-      }
+      if (isCinematic) {
+        // --- CINEMATIC FULL SCREEN ---
+        const container = document.getElementById('cinematic-container');
+        const drop = document.getElementById('cine-drop');
+        const content = document.getElementById('cine-content');
+        
+        document.getElementById('cine-platform').textContent = getPlatform(data.source, data.type, data.gameTitle);
+        document.getElementById('cine-title').textContent = data.title || 'Achievement Unlocked';
+        document.getElementById('cine-desc').textContent = data.description || '';
+        document.getElementById('cine-badge').textContent = getBadge(data.source);
+        setupIcon('cine-icon-box', 'cine-svg', data.iconUrl);
+        
+        if (data.globalPercent != null) {
+          document.getElementById('cine-meta').style.display = 'flex';
+          document.getElementById('cine-pct-val').textContent = data.globalPercent.toFixed(1) + '%';
+          setTimeout(() => document.getElementById('cine-pct-fill').style.width = Math.min(data.globalPercent, 100) + '%', 1500);
+        } else {
+          document.getElementById('cine-meta').style.display = 'none';
+        }
 
-      // ── Unlock time
-      const ts = data.earnedAt || data.unlockTime;
-      timeEl.textContent = ts ? 'Unlocked ' + formatTime(ts) : '';
+        if (data.type === 'platinum' || data.type === 'grand_master') {
+          content.classList.add('holographic');
+          setTimeout(fireConfetti, 1000);
+        } else {
+          content.classList.remove('holographic');
+        }
 
-      // ── Variants
-      if (data.type === 'first_launch') {
-        card.classList.add('variant-celebration');
-      } else if (data.type === 'new_user_welcome') {
-        card.classList.add('variant-new-user');
-      } else if (data.type === 'grand_master' || data.type === 'platinum') {
-        card.classList.add('variant-grand-master');
-      }
-      // Rare achievement (<5% players) gets animated border
-      if (pct != null && pct < 5) {
-        card.classList.add('variant-rare');
-      }
-
-      // ── Animate in
-      requestAnimationFrame(() => {
-        card.classList.add('show');
+        container.classList.add('show');
+        drop.classList.add('animate');
+        
         setTimeout(() => {
-          shimmer.classList.add('sweep');
-          createParticles(data.type);
-        }, 550);
-      });
+          content.classList.add('reveal');
+          // Particle burst
+          const rect = document.getElementById('cine-icon-box').getBoundingClientRect();
+          createParticles(rect.left + rect.width/2, rect.top + rect.height/2, getColor(data.type, data.source), 60, container);
+        }, 1000);
+
+        // Hide logic handled by main process terminating window, but we add visual cleanup
+        setTimeout(() => {
+          content.classList.remove('reveal');
+          container.classList.remove('show');
+          drop.classList.remove('animate');
+          document.getElementById('cine-pct-fill').style.width = '0%';
+        }, 5500);
+
+      } else {
+        // --- STANDARD SLIDE IN ---
+        const card = document.getElementById('std-card');
+        
+        document.getElementById('std-platform').textContent = getPlatform(data.source, data.type, data.gameTitle);
+        document.getElementById('std-title').textContent = data.title || 'Achievement Unlocked';
+        document.getElementById('std-desc').textContent = data.description || '';
+        document.getElementById('std-badge').textContent = getBadge(data.source);
+        setupIcon('std-icon-box', 'std-svg', data.iconUrl);
+
+        if (data.globalPercent != null) {
+          document.getElementById('std-meta').style.display = 'flex';
+          document.getElementById('std-pct-val').textContent = data.globalPercent.toFixed(1) + '%';
+          setTimeout(() => document.getElementById('std-pct-fill').style.width = Math.min(data.globalPercent, 100) + '%', 500);
+        } else {
+          document.getElementById('std-meta').style.display = 'none';
+        }
+
+        // Show
+        setTimeout(() => {
+          card.classList.add('show');
+          setTimeout(() => {
+            const rect = document.getElementById('std-icon-box').getBoundingClientRect();
+            createParticles(rect.left + rect.width/2, rect.top + rect.height/2, getColor(data.type, data.source), 20, document.body);
+          }, 300);
+        }, 50);
+
+        // Hide
+        setTimeout(() => {
+          card.classList.remove('show');
+          document.getElementById('std-pct-fill').style.width = '0%';
+        }, 5500);
+      }
     });
   </script>
 </body>

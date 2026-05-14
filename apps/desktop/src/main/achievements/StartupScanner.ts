@@ -1,9 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from 'prisma-client-desktop/index.js';
 import { resolveAchievementPath } from './PathResolver.js';
 import { readAchievements, diffAchievements, AchievementState } from './AchievementReader.js';
 import axios from 'axios';
 import log from 'electron-log';
 import { API_BASE_URL } from '../config.js';
+import path from 'path';
 
 export interface WatchedGame {
   gameId: string;
@@ -36,7 +37,7 @@ export async function scanOnStartup(watchedGames: WatchedGame[], db: any, userId
     try {
       log.info(`[StartupScan] Scanning for ${game.title}`);
       
-      const resolved = await resolveAchievementPath(game.steamAppId, game.exePath);
+      const resolved = await resolveAchievementPath(game.steamAppId, path.dirname(game.exePath));
       if (!resolved) {
         log.info(`[StartupScan] No achievement path found for ${game.title}`);
         continue;
@@ -105,18 +106,8 @@ export async function scanOnStartup(watchedGames: WatchedGame[], db: any, userId
                 source: resolved.emulator
               });
             } catch (apiErr: any) {
-              log.warn(`[StartupScan] API sync failed for ${ach.id}, marking pending: ${apiErr.message}`);
-              // Fallback: set pendingSync in DB
-              await (db as any).gameAchievement.update({
-                where: {
-                  userId_gameId_key: {
-                    userId,
-                    gameId: game.gameId,
-                    key: dbKey
-                  }
-                },
-                data: { pendingSync: true }
-              });
+              log.warn(`[StartupScan] API sync failed for ${ach.id}: ${apiErr.message}`);
+              // Achievement is saved locally, will sync on next opportunity
             }
           } catch (dbErr: any) {
             log.error(`[StartupScan] DB error for ${ach.id}: ${dbErr.message}`);

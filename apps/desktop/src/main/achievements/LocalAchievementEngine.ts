@@ -96,7 +96,17 @@ export class CrackedAchievementEngine extends EventEmitter {
         game.lastState = currentState;
 
         for (const ach of newlyUnlocked) {
-          const def = definitions.get(ach.id);
+          let def = definitions.get(ach.id);
+          if (!def) {
+            // Fallback: match by key ignoring prefix (e.g. steam_ACHIEVEMENT -> ACHIEVEMENT)
+            for (const [k, v] of definitions.entries()) {
+              if (k.endsWith(`_${ach.id}`) || k === ach.id) {
+                def = v;
+                break;
+              }
+            }
+          }
+
           const unlocked: UnlockedAchievement = {
             key: ach.id,
             name: def?.name || ach.id,

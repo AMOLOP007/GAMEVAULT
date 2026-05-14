@@ -242,14 +242,111 @@ export async function syncAchievements(gameId: string) {
   }
 }
 
+async function searchSteamAppId(title: string): Promise<number | null> {
+  try {
+    const res = await axios.get(`https://store.steampowered.com/api/storesearch/`, {
+      params: { term: title, l: 'english', cc: 'US' }
+    });
+    const apps = res.data.items;
+    if (apps && apps.length > 0) {
+      return apps[0].id;
+    }
+  } catch (err: any) {
+    console.error(`[SteamSearch] Failed for ${title}: ${err.message}`);
+  }
+  return null;
+}
+
+async function fetchFromSteamXML(appId: number): Promise<AchievementData[] | null> {
+  try {
+    // Find any user with a steamId to use for fetching
+    const user = await (prisma as any).user.findFirst({
+      where: {
+        AND: [
+          { steamId: { not: null } },
+          { steamId: { not: '' } }
+        ]
+      },
+      select: {
+        steamId: true
+      }
+    });
+    
+    // Fallback ID if no user has one linked yet
+    const steamId = user?.steamId || '76561197960285355'; 
+    
+    const isNumeric = /^\d+$/.test(steamId);
+    const baseUrl = isNumeric 
+      ? `https://steamcommunity.com/profiles/${steamId}`
+      : `https://steamcommunity.com/id/${steamId}`;
+      
+    const url = `${baseUrl}/stats/${appId}/achievements/?xml=1`;
+    console.log(`[Metadata] Fetching Steam XML for definitions: ${url}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+
+    if (!response.ok) return null;
+    const text = await response.text();
+    
+    const achievementBlocks = text.split(/<achievement\s+/);
+    achievementBlocks.shift(); // Remove header
+
+    const achievements = [];
+    for (const block of achievementBlocks) {
+      const nameMatch = block.match(/<name><!\[CDATA\[(.*?)\]\]><\/name>/)?.[1] || block.match(/<name>(.*?)<\/name>/)?.[1];
+      const descMatch = block.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/)?.[1] || block.match(/<description>(.*?)<\/description>/)?.[1];
+      const iconMatch = block.match(/<iconClosed><!\[CDATA\[(.*?)\]\]><\/iconClosed>/)?.[1] || block.match(/<iconClosed>(.*?)<\/iconClosed>/)?.[1];
+      const apiNameMatch = block.match(/<apiname><!\[CDATA\[(.*?)\]\]><\/apiname>/)?.[1] || block.match(/<apiname>(.*?)<\/apiname>/)?.[1];
+      
+      if (nameMatch) {
+        achievements.push({
+          key: `steam_${apiNameMatch || nameMatch.trim()}`,
+          title: nameMatch.trim(),
+          description: descMatch?.trim() || '',
+          iconUrl: iconMatch || ''
+        });
+      }
+    }
+    
+    return achievements.length > 0 ? achievements : null;
+  } catch (err: any) {
+    console.error(`[Metadata] Steam XML fallback failed: ${err.message}`);
+    return null;
+  }
+}
+
 async function getAchievements(gameId: string): Promise<AchievementData[] | null> {
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) return null;
 
   // 1. Steam Web API
-  if (game.steamAppId) {
-    const steamData = await fetchFromSteam(game.steamAppId);
+  let steamAppId = game.steamAppId;
+  if (!steamAppId && game.title) {
+    console.log(`[Metadata] Missing steamAppId for ${game.title}, searching Steam...`);
+    steamAppId = await searchSteamAppId(game.title);
+    if (steamAppId) {
+      console.log(`[Metadata] Found steamAppId ${steamAppId} for ${game.title}`);
+      // Update DB with found ID
+      await (prisma as any).game.update({
+        where: { id: gameId },
+        data: { steamAppId }
+      }).catch(() => {});
+    }
+  }
+
+  if (steamAppId) {
+    const steamData = await fetchFromSteam(steamAppId);
     if (steamData && steamData.length > 0) return steamData;
+    
+    // Fallback to XML if Steam API key is missing or failed
+    console.log(`[Metadata] Steam API failed or missing key, trying XML fallback for ${game.title}...`);
+    const xmlData = await fetchFromSteamXML(steamAppId);
+    if (xmlData && xmlData.length > 0) return xmlData;
   }
 
   // 1.5. Epic Games Store (GraphQL)
@@ -563,26 +660,35 @@ async function fetchFromCommunity(gameId: string): Promise<AchievementData[] | n
 }
 
 export async function hydrateAllMissingMetadata() {
-  // Hydrate games that: (a) have no cover, OR (b) have a garbage title (internal code like 'b1')
+  // 1. Games with no cover or empty title
   const games = await prisma.game.findMany({
     where: {
       OR: [
         { coverUrl: null },
         { title: { equals: '' } },
-        // Short titles <= 4 chars are almost certainly internal exe names
-        // We can't do length check in Prisma, so we'll filter client-side
       ]
     }
   });
 
-  // Also get all games and filter for garbage titles client-side
+  // 2. Games with garbage titles (filtered client-side)
   const allGames = await prisma.game.findMany();
   const garbageGames = allGames.filter(g => 
     (g.title.length <= 4 || /^[a-zA-Z]\d*$/.test(g.title)) && 
     !games.find(x => x.id === g.id)
   );
 
-  const toHydrate = [...games, ...garbageGames];
+  // 3. Games with no achievements
+  const noAchGames = await prisma.game.findMany({
+    where: {
+      achievements: {
+        none: {}
+      }
+    }
+  });
+
+  // Merge and deduplicate by ID
+  const combined = [...games, ...garbageGames, ...noAchGames];
+  const toHydrate = Array.from(new Map(combined.map(g => [g.id, g])).values());
 
   if (toHydrate.length === 0) return;
 

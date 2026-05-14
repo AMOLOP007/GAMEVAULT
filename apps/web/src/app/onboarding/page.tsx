@@ -37,6 +37,10 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     const checkProfile = async () => {
+      if (!api.getToken()) {
+        router.push('/login');
+        return;
+      }
       try {
         const user = await api.getMe();
         if (user && user.avatarUrl && user.avatarUrl.length > 0) {
@@ -48,7 +52,7 @@ export default function OnboardingPage() {
       }
     };
     checkProfile();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (step !== 'vault' || search.length < 3) {

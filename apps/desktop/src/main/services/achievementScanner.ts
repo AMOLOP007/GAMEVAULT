@@ -3,7 +3,7 @@ import path from 'path';
 import fg from 'fast-glob';
 import log from 'electron-log';
 import vdf from 'vdf-parser';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from 'prisma-client-desktop/index.js';
 
 const prisma = new PrismaClient();
 

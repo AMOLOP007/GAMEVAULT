@@ -16,7 +16,8 @@ contextBridge.exposeInMainWorld('gameVault', {
   getCurrentSession: () => ipcRenderer.invoke('playtime:currentSession'),
 
   // Achievements
-  getAchievements: (gameId) => ipcRenderer.invoke('achievements:get', gameId),
+  getAchievements: (gameId, payload) => ipcRenderer.invoke('achievements:get', gameId, payload),
+  markAchievementDone: (payload) => ipcRenderer.invoke('achievements:markDone', payload),
   addCustomChallenge: (challenge) => ipcRenderer.invoke('challenges:add', challenge),
 
   // Overlay

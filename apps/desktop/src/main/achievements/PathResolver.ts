@@ -6,7 +6,7 @@ import log from 'electron-log';
 
 function findSteamAppIdInDir(dir: string): string | null {
   let currentDir = dir;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 8; i++) {
     const filePath = path.join(currentDir, 'steam_appid.txt');
     if (fs.existsSync(filePath)) {
       try {
@@ -62,9 +62,18 @@ export async function resolveAchievementPath(steamAppId: number | null, installD
   ];
 
   let currentDir = installDir;
-  for (let i = 0; i < 3; i++) { // Scan up to 3 levels
+  for (let i = 0; i < 8; i++) { // Scan up to 8 levels
+    if (currentDir.endsWith(':\\') || currentDir.endsWith(':/')) break; // Prevent scanning entire drive
+    
+    // Hardcoded check for specific paths to avoid glob failures
+    const specificPath = path.join(currentDir, 'Engine/Binaries/ThirdParty/Steamworks/Steamv151/Win64/steam_settings/achievements.json');
+    if (fs.existsSync(specificPath)) {
+      log.info(`[PathResolver] Found hardcoded achievement path: ${specificPath}`);
+      return { filePath: specificPath, format: 'json', emulator: 'goldberg' };
+    }
+
     try {
-      const files = await fg(patterns, { cwd: currentDir, absolute: true });
+      const files = await fg(patterns, { cwd: currentDir, absolute: true, caseSensitiveMatch: false });
       
       let foundAchievements = false;
       for (const file of files) {
@@ -108,7 +117,7 @@ export async function resolveAchievementPath(steamAppId: number | null, installD
     }
     
     const parent = path.dirname(currentDir);
-    if (parent === currentDir) break; // Reached root
+    if (parent === currentDir || currentDir.endsWith(':\\') || currentDir.endsWith(':/')) break; // Reached root or drive root
     currentDir = parent;
   }
 

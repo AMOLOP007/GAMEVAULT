@@ -139,21 +139,50 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="space-y-6">
-               <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 relative overflow-hidden">
-                  <div className="flex items-center justify-between relative z-10">
-                     <p className="text-sm font-black text-white uppercase tracking-widest">Consistency Score</p>
-                     <p className="text-2xl font-black text-emerald-400">94.2%</p>
-                  </div>
-                  <div className="mt-4 w-full h-1.5 bg-white/5 rounded-full overflow-hidden relative z-10">
-                     <div className="h-full bg-emerald-400 w-[94%]" />
-                  </div>
-               </div>
+               {(() => {
+                 // Compute real consistency score from weekly data
+                 const daysWithPlay = weekly.filter((d: any) => (d.minutes || 0) > 0).length;
+                 const totalDays = Math.max(weekly.length, 1);
+                 const consistency = Math.round((daysWithPlay / totalDays) * 100);
+                 
+                 // Derive archetype from playtime patterns
+                 const totalMinutes = weekly.reduce((s: number, d: any) => s + (d.minutes || 0), 0);
+                 const avgPerDay = totalMinutes / totalDays;
+                 let archetype = 'Casual Explorer';
+                 let archetypeDesc = `You play around ${Math.round(avgPerDay)} minutes per day on average. A relaxed, balanced approach to gaming.`;
+                 
+                 if (avgPerDay > 180) {
+                   archetype = 'Marathon Runner';
+                   archetypeDesc = `You average ${Math.round(avgPerDay)} minutes per day — deep, marathon-style sessions. You commit to games and see them through.`;
+                 } else if (avgPerDay > 90) {
+                   archetype = 'Dedicated Player';
+                   archetypeDesc = `With ${Math.round(avgPerDay)} minutes per day, you maintain a strong gaming habit with consistent engagement across your library.`;
+                 } else if (daysWithPlay > totalDays * 0.7) {
+                   archetype = 'Daily Devotee';
+                   archetypeDesc = `You play most days (${daysWithPlay}/${totalDays}), preferring shorter but frequent sessions. Consistency is your strength.`;
+                 }
+                 
+                 return (
+                   <>
+                     <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 relative overflow-hidden">
+                       <div className="flex items-center justify-between relative z-10">
+                         <p className="text-sm font-black text-white uppercase tracking-widest">Consistency Score</p>
+                         <p className="text-2xl font-black text-emerald-400">{consistency}%</p>
+                       </div>
+                       <div className="mt-4 w-full h-1.5 bg-white/5 rounded-full overflow-hidden relative z-10">
+                         <div className="h-full bg-emerald-400" style={{ width: `${consistency}%` }} />
+                       </div>
+                     </div>
 
-               <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5">
-                  <p className="text-xs font-bold text-slate-400 leading-relaxed italic">
-                    "Your patterns indicate a <b>Weekend Warrior</b> archetype. You concentrate 65% of your total playtime between Friday evening and Sunday night, with a preference for long, marathon-style sessions in Action titles."
-                  </p>
-               </div>
+                     <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5">
+                       <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">{archetype}</p>
+                       <p className="text-xs font-bold text-slate-400 leading-relaxed italic">
+                         {archetypeDesc}
+                       </p>
+                     </div>
+                   </>
+                 );
+               })()}
             </div>
          </motion.div>
       </div>

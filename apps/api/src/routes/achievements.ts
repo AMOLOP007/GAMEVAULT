@@ -16,49 +16,54 @@ export default async function achievementRoutes(fastify: FastifyInstance) {
 
   // GET /api/achievements/stats - Get achievement stats per game
   fastify.get('/stats', async (request: FastifyRequest) => {
-    const userId = (request.user as any).sub;
-    const userGames = await prisma.userGame.findMany({
-      where: { userId },
-      include: { 
-        game: {
-          include: {
-            gameAchievements: {
-              where: { userId }
-            },
-            achievements: {
-              include: {
-                earned: { where: { userId } }
+    try {
+      const userId = (request.user as any).sub;
+      const userGames = await prisma.userGame.findMany({
+        where: { userId },
+        include: { 
+          game: {
+            include: {
+              gameAchievements: {
+                where: { userId }
+              },
+              achievements: {
+                include: {
+                  earned: { where: { userId } }
+                }
               }
             }
           }
         }
-      }
-    });
+      });
 
-    return userGames.map(ug => {
-      // 1. Official Trophies (Steam/Epic)
-      const official = ug.game.gameAchievements;
-      const officialEarned = official.filter(a => a.isEarned).length;
-      const officialTotal = official.length;
+      return userGames.map(ug => {
+        // 1. Official Trophies (Steam/Epic)
+        const official = ug.game.gameAchievements;
+        const officialEarned = official.filter(a => a.isEarned).length;
+        const officialTotal = official.length;
 
-      // 2. Internal Milestones (Vault)
-      const internal = ug.game.achievements;
-      const internalEarned = internal.filter(a => a.earned && a.earned.length > 0).length;
-      const internalTotal = internal.length;
+        // 2. Internal Milestones (Vault)
+        const internal = ug.game.achievements;
+        const internalEarned = internal.filter(a => a.earned && a.earned.length > 0).length;
+        const internalTotal = internal.length;
 
-      const totalEarned = officialEarned + internalEarned;
-      const totalCount = officialTotal + internalTotal;
+        const totalEarned = officialEarned + internalEarned;
+        const totalCount = officialTotal + internalTotal;
 
-      return {
-        gameId: ug.gameId,
-        title: ug.game.title,
-        coverUrl: ug.game.coverUrl,
-        steamAppId: ug.game.steamAppId,
-        earned: totalEarned,
-        total: totalCount,
-        percentage: totalCount > 0 ? Math.round((totalEarned / totalCount) * 100) : 0
-      };
-    }).filter(g => g.total > 0 || g.steamAppId || g.gameId);
+        return {
+          gameId: ug.gameId,
+          title: ug.game.title,
+          coverUrl: ug.game.coverUrl,
+          steamAppId: ug.game.steamAppId,
+          earned: totalEarned,
+          total: totalCount,
+          percentage: totalCount > 0 ? Math.round((totalEarned / totalCount) * 100) : 0
+        };
+      }).filter(g => g.total > 0 || g.steamAppId || g.gameId);
+    } catch (err: any) {
+      request.log.error(`Failed to get achievement stats: ${err.message}`);
+      throw err;
+    }
   });
 
   // POST /api/achievements/check - Check for milestone achievements

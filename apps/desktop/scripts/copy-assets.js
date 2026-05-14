@@ -3,6 +3,7 @@ import path from 'path';
 
 const files = [
   { src: 'src/main/preload.cjs', dest: 'dist/main/preload.cjs' },
+  { src: 'src/main/overlayPreload.cjs', dest: 'dist/main/overlayPreload.cjs' },
   { src: 'src/renderer/overlay.html', dest: 'dist/renderer/overlay.html' }
 ];
 

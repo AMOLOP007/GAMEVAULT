@@ -20,10 +20,18 @@ export default function TrophiesPage() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [pendingOfflineAchs, setPendingOfflineAchs] = useState<any[]>([]);
   const [poppingTrophy, setPoppingTrophy] = useState(false);
+  const [currentPoppingTrophy, setCurrentPoppingTrophy] = useState<any>(null);
   const [trophyFilter, setTrophyFilter] = useState<'all' | 'steam' | 'inapp'>('all');
+  const [trophySearch, setTrophySearch] = useState('');
+  const [showTrophySearch, setShowTrophySearch] = useState(false);
 
   useEffect(() => {
     const fetchGameStats = async () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('gv_token') : null;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
       try {
         const stats = await api.get<any[]>('/api/achievements/stats');
         setGameStats(stats);
@@ -53,6 +61,25 @@ export default function TrophiesPage() {
     setSelectedGameId(gameId);
     setLoadingAchievements(true);
     try {
+      const selectedGame = gameStats.find(g => g.gameId === gameId);
+
+      // Try local Electron bridge first (uses robust XML fallback)
+      if (typeof window !== 'undefined' && (window as any).gameVault?.getAchievements) {
+        const localAchs = await (window as any).gameVault.getAchievements(gameId, {
+          title: selectedGame?.title,
+          steamAppId: selectedGame?.steamAppId
+        });
+        if (localAchs && localAchs.length > 0) {
+          setAchievements(localAchs.map((a: any) => ({
+            ...a,
+            isOfficial: a.source === 'steam' || a.source === 'epic',
+            title: a.name || a.title
+          })));
+          setLoadingAchievements(false);
+          return;
+        }
+      }
+
       const data = await api.get<any>(`/api/achievements/${gameId}`);
       // Unify the list for display
       const unified = [
@@ -90,6 +117,7 @@ export default function TrophiesPage() {
   };
 
   const handlePopIndividual = async (ach: any) => {
+    setCurrentPoppingTrophy(ach);
     setPoppingTrophy(true);
     (window as any).gameVault?.triggerTrophy({
       title: ach.name || ach.title,
@@ -107,6 +135,7 @@ export default function TrophiesPage() {
 
   const handleMarkAsDone = async (ach: any) => {
     if (window.confirm(`Mark "${ach.name || ach.title}" as done and pop trophy?`)) {
+      setCurrentPoppingTrophy(ach);
       setPoppingTrophy(true);
       
       (window as any).gameVault?.triggerTrophy({
@@ -124,9 +153,44 @@ export default function TrophiesPage() {
         a.key === ach.key ? { ...a, isEarned: true, earnedAt: new Date() } : a
       ));
       
+      // Persist to local DB via Electron
+      (window as any).gameVault?.markAchievementDone?.({
+        gameId: selectedGameId,
+        key: ach.key,
+        name: ach.name || ach.title,
+        description: ach.description,
+        iconUrl: ach.iconUrl
+      });
+      
       await new Promise(resolve => setTimeout(resolve, 4000));
       setPoppingTrophy(false);
     }
+  };
+
+  const handleShowWelcomeAnimation = async () => {
+    setCurrentPoppingTrophy(null);
+    setPoppingTrophy(true);
+    
+    // Trigger welcome trophy
+    (window as any).gameVault?.triggerTrophy({
+      title: 'Welcome to GameVault!',
+      description: 'You have taken your first step into the ultimate gaming vault.',
+      type: 'new_user_welcome',
+      source: 'first_launch'
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    
+    // Trigger welcome badge
+    (window as any).gameVault?.triggerTrophy({
+      title: 'Badge Earned: Welcome to the Vault',
+      description: 'Create your account and start your journey',
+      type: 'gold',
+      source: 'badge'
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    setPoppingTrophy(false);
   };
 
   const filteredGames = gameStats.filter(g => 
@@ -134,9 +198,11 @@ export default function TrophiesPage() {
   );
 
   const filteredAchievements = achievements.filter(ach => {
-    if (trophyFilter === 'steam') return ach.isOfficial;
-    if (trophyFilter === 'inapp') return !ach.isOfficial;
-    return true;
+    const matchesFilter = trophyFilter === 'all' || 
+                         (trophyFilter === 'steam' && ach.isOfficial) || 
+                         (trophyFilter === 'inapp' && !ach.isOfficial);
+    const matchesSearch = (ach.name || ach.title || '').toLowerCase().includes(trophySearch.toLowerCase());
+    return matchesFilter && matchesSearch;
   });
 
   return (
@@ -232,9 +298,17 @@ export default function TrophiesPage() {
                 <Sparkles className="w-10 h-10 text-[#fbbf24] opacity-20" />
               </div>
               <h2 className="text-2xl font-black text-white tracking-tight mb-2">Trophy Vault</h2>
-              <p className="text-sm text-[#64748b] max-w-xs font-bold leading-relaxed">
+              <p className="text-sm text-[#64748b] max-w-xs font-bold leading-relaxed mb-4">
                 Select a game from the sidebar to view your earned achievements and upcoming challenges.
               </p>
+              {gameStats.reduce((acc, g) => acc + (g.earned || 0), 0) === 0 && (
+                <button
+                  onClick={handleShowWelcomeAnimation}
+                  className="px-4 py-2 bg-[#8b5cf6] text-white rounded-xl text-xs font-black uppercase hover:bg-[#8b5cf6]/80 transition-colors"
+                >
+                  Play Welcome Animation
+                </button>
+              )}
             </motion.div>
           ) : (
             <motion.div 
@@ -284,21 +358,55 @@ export default function TrophiesPage() {
 
               {/* Achievements Grid */}
               <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
-                {/* Unique Toggle */}
-                <div className="flex gap-2 mb-6 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 w-fit">
-                  {(['all', 'steam', 'inapp'] as const).map(tab => (
+                {/* Unique Toggle & Search */}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="flex gap-2 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 w-fit">
+                    {(['all', 'steam', 'inapp'] as const).map(tab => (
+                      <button
+                        key={tab}
+                        onClick={() => setTrophyFilter(tab)}
+                        className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                          trophyFilter === tab 
+                            ? 'bg-[#fbbf24] text-[#0c0c1d] shadow-lg' 
+                            : 'text-[#64748b] hover:text-white'
+                        }`}
+                      >
+                        {tab === 'all' ? 'All Trophies' : tab === 'steam' ? 'Steam' : 'In-App'}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
                     <button
-                      key={tab}
-                      onClick={() => setTrophyFilter(tab)}
-                      className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                        trophyFilter === tab 
-                          ? 'bg-[#fbbf24] text-[#0c0c1d] shadow-lg' 
-                          : 'text-[#64748b] hover:text-white'
+                      onClick={() => setShowTrophySearch(!showTrophySearch)}
+                      className={`p-2 rounded-xl border transition-all ${
+                        showTrophySearch 
+                          ? 'bg-[#fbbf24]/10 border-[#fbbf24]/20 text-[#fbbf24]' 
+                          : 'bg-white/[0.02] border-white/5 text-[#64748b] hover:text-white'
                       }`}
                     >
-                      {tab === 'all' ? 'All Trophies' : tab === 'steam' ? 'Steam' : 'In-App'}
+                      <Search className="w-4 h-4" />
                     </button>
-                  ))}
+                    
+                    <AnimatePresence>
+                      {showTrophySearch && (
+                        <motion.div
+                          initial={{ width: 0, opacity: 0 }}
+                          animate={{ width: 200, opacity: 1 }}
+                          exit={{ width: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <input
+                            type="text"
+                            placeholder="Search trophies..."
+                            value={trophySearch}
+                            onChange={(e) => setTrophySearch(e.target.value)}
+                            className="bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/20 w-full focus:outline-none focus:border-[#fbbf24]/30 transition-all"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
 
                 {pendingOfflineAchs.length > 0 && (
@@ -387,6 +495,19 @@ export default function TrophiesPage() {
                         )}
                       </motion.div>
                     ))}
+                    {filteredAchievements.length === 0 && (
+                      <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+                        <Trophy className="w-12 h-12 text-white/10 mb-4" />
+                        <h3 className="text-sm font-black text-white uppercase mb-1">No Trophies Yet</h3>
+                        <p className="text-xs text-[#64748b] font-bold uppercase tracking-widest mb-4">Earn trophies by playing games or syncing your library.</p>
+                        <button
+                          onClick={handleShowWelcomeAnimation}
+                          className="px-4 py-2 bg-[#8b5cf6] text-white rounded-xl text-xs font-black uppercase hover:bg-[#8b5cf6]/80 transition-colors"
+                        >
+                          Play Welcome Animation
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -395,25 +516,7 @@ export default function TrophiesPage() {
         </AnimatePresence>
       </div>
 
-      {/* ── Popping Trophy Dimmer ── */}
-      <AnimatePresence>
-        {poppingTrophy && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] bg-[#030308]/90 backdrop-blur-sm flex flex-col items-center justify-center"
-          >
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-[#fbbf24]/5 border border-[#fbbf24]/10 flex items-center justify-center mb-6 mx-auto">
-                <Sparkles className="w-8 h-8 text-[#fbbf24] animate-pulse" />
-              </div>
-              <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-1">Popping Trophy</h3>
-              <p className="text-[10px] font-black text-[#64748b] uppercase tracking-widest">Reliving the moment...</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ── Popping Trophy Dimmer Disabled ── */}
 
       <AnimatePresence>
         {showSyncModal && (
