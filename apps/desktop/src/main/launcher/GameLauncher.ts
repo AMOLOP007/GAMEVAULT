@@ -128,6 +128,16 @@ export class GameLauncher {
     const cwd = workingDir || path.dirname(normalized)
     log.info(`[Launcher] Attempting to launch: ${normalized} in ${cwd}`)
 
+    // If it's a shortcut (.lnk), use shell.openPath so Windows handles it properly (like double-clicking)
+    if (normalized.toLowerCase().endsWith('.lnk')) {
+      log.info(`[Launcher] Detected shortcut (.lnk), using shell.openPath for Explorer behavior`);
+      const error = await shell.openPath(normalized);
+      if (error) {
+        throw new Error(`Failed to open shortcut: ${error}`);
+      }
+      return null; // Return null so it falls back to fuzzy matching in index.ts
+    }
+
     try {
       const child = spawn(normalized, [], {
         detached: true, // Allow it to live beyond GameVault if needed, but we still track it

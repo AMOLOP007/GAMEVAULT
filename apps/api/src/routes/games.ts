@@ -92,9 +92,32 @@ export default async function gameRoutes(fastify: FastifyInstance) {
     });
 
     if (duplicate) {
-      return reply.code(400).send({ 
-        error: `Game already exists in your library as "${duplicate.game.title}"` 
-      });
+      // Game already exists in library. Update missing IDs if any.
+      let needsUpdate = false;
+      const updateData: any = {};
+
+      if (!duplicate.game.steamAppId && steamAppId) {
+        updateData.steamAppId = Number(steamAppId);
+        needsUpdate = true;
+      }
+      if (!duplicate.game.epicAppId && epicAppId) {
+        updateData.epicAppId = epicAppId;
+        needsUpdate = true;
+      }
+      if (!duplicate.game.gogAppId && gogAppId) {
+        updateData.gogAppId = gogAppId;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        await prisma.game.update({
+          where: { id: duplicate.game.id },
+          data: updateData
+        });
+        console.log(`[API] Updated missing IDs for existing game in library: ${duplicate.game.title}`);
+      }
+
+      return reply.code(200).send(duplicate);
     }
     // ───────────────────────────────────────────────────────────────────────
 
@@ -144,12 +167,35 @@ export default async function gameRoutes(fastify: FastifyInstance) {
         }
       }
     } else {
-      // Game already exists — upgrade its title if current one is garbage
+      // Game already exists — upgrade its title or missing IDs
+      let needsUpdate = false;
+      const updateData: any = {};
+
       const existingTitleIsGarbage = game.title.length <= 4 || /^[a-zA-Z]\d*$/.test(game.title);
       if (existingTitleIsGarbage && bestTitle && bestTitle.length > game.title.length) {
+        updateData.title = bestTitle;
+        needsUpdate = true;
+      }
+
+      if (!game.steamAppId && steamAppId) {
+        updateData.steamAppId = Number(steamAppId);
+        needsUpdate = true;
+      }
+
+      if (!game.epicAppId && epicAppId) {
+        updateData.epicAppId = epicAppId;
+        needsUpdate = true;
+      }
+
+      if (!game.gogAppId && gogAppId) {
+        updateData.gogAppId = gogAppId;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
         game = await prisma.game.update({
           where: { id: game.id },
-          data: { title: bestTitle }
+          data: updateData
         });
       }
     }

@@ -205,8 +205,106 @@ async function autoScanAndSync(userId: string) {
     }
     
     mainWindow?.webContents.send('library:updated');
+
+    // Trigger background offline achievement scan (Optimization: delayed start)
+    // Trigger background offline achievement scan
+    setTimeout(async () => {
+      try {
+        const { scanOnStartup, formatNotificationStrategy } = await import('./achievements/StartupScanner.js');
+        const games = await (prisma as any).game.findMany({
+          where: { steamAppId: { not: null }, exePath: { not: null } }
+        });
+        
+        const watchedGames = games.map((g: any) => ({
+          gameId: g.id,
+          title: g.title,
+          steamAppId: g.steamAppId!,
+          exePath: g.exePath!
+        }));
+
+        const report = await scanOnStartup(watchedGames, prisma, userId);
+        const strategy = formatNotificationStrategy(report);
+
+        if (strategy.items.length > 0) {
+          log.info(`[AutoScan] Detected missed achievements. Mode: ${strategy.mode}`);
+          
+          if (strategy.mode === 'sequential') {
+            strategy.items.forEach((item, index) => {
+              setTimeout(() => {
+                mainWindow?.webContents.send('achievement:unlocked', {
+                  gameId: item.gameId,
+                  title: item.achievementId,
+                  gameTitle: item.gameName,
+                });
+              }, index * 3000);
+            });
+          } else if (strategy.mode === 'grouped') {
+            mainWindow?.webContents.send('achievements:offlineDetected', strategy.items);
+          } else if (strategy.mode === 'summary') {
+            mainWindow?.webContents.send('achievements:offlineDetected', [{
+              summary: true,
+              count: strategy.items.length,
+              message: `You earned ${strategy.items.length} achievements while offline.`
+            }]);
+          }
+        }
+      } catch (err: any) {
+        log.error(`[AutoScan] Missed achievement scan failed: ${err.message}`);
+      }
+    }, 5000);
   } catch (err) {
     log.error('[AutoScan] Failed:', err);
+  }
+}
+
+// Prevents re-scanning the same game twice in one app session
+const sessionScannedGames = new Set<string>();
+
+async function scanGameAchievementsOnce(gameId: string, userId: string): Promise<void> {
+  if (sessionScannedGames.has(gameId)) return;
+  sessionScannedGames.add(gameId);
+
+  try {
+    const offlineAchs = await crackedAchEngine.scanForOfflineAchievements(userId, gameId);
+    if (offlineAchs.length === 0) return;
+
+    log.info(`[LazyAchScan] Found ${offlineAchs.length} offline achievements for game ${gameId}`);
+
+    // Silent bulk DB save — no popup for already-earned achievements
+    for (const ach of offlineAchs) {
+      try {
+        await (prisma as any).gameAchievement.upsert({
+          where: {
+            userId_gameId_key: {
+              userId,
+              gameId: ach.gameId,
+              key: `${ach.source}_${ach.key}`,
+            },
+          },
+          update: {},
+          create: {
+            userId,
+            gameId:       ach.gameId,
+            key:          `${ach.source}_${ach.key}`,
+            name:         ach.name,
+            description:  ach.description || '',
+            iconUrl:      ach.iconUrl,
+            isEarned:     true,
+            earnedAt:     ach.earnedAt || new Date(),
+            source:       ach.source,
+          },
+        });
+      } catch (dbErr: any) {
+        log.warn(`[LazyAchScan] DB upsert failed for ${ach.key}: ${dbErr.message}`);
+      }
+    }
+
+    // One summary notification to the renderer — NOT 50 individual ones
+    mainWindow?.webContents.send('achievements:offlineDetected', offlineAchs);
+
+  } catch (err: any) {
+    log.warn(`[LazyAchScan] Scan failed for game ${gameId}: ${err.message}`);
+    sessionScannedGames.delete(gameId);
   }
 }
 
@@ -447,6 +545,105 @@ function setupTracker() {
 
 // ── IPC Handlers ──────────────────────────────
 ipcMain.handle('auth:getToken', () => store.get('token'));
+
+ipcMain.handle('achievements:confirmOffline', async (_, { achievements }) => {
+  const userId = store.get('userId') as string;
+  if (!userId) return { success: false };
+
+  log.info(`[Main] Processing ${achievements.length} offline achievements...`);
+
+  const POPUP_THRESHOLD = 3;
+  const shouldShowPopups = achievements.length <= POPUP_THRESHOLD;
+
+  for (const ach of achievements) {
+    try {
+      await (prisma as any).gameAchievement.upsert({
+        where: {
+          userId_gameId_key: {
+            userId,
+            gameId: ach.gameId,
+            key: `${ach.source}_${ach.key}`,
+          }
+        },
+        update: {
+          isEarned: true,
+          earnedAt: ach.earnedAt || new Date(),
+          name: ach.name,
+        },
+        create: {
+          userId,
+          gameId: ach.gameId,
+          key: `${ach.source}_${ach.key}`,
+          name: ach.name,
+          description: ach.description || '',
+          iconUrl: ach.iconUrl,
+          isEarned: true,
+          earnedAt: ach.earnedAt || new Date(),
+          source: ach.source,
+        }
+      });
+    } catch (err: any) {
+      log.error(`[Main] Failed to save offline achievement to DB: ${err.message}`);
+    }
+
+    // ── Task 1: Cloud Sync ──────────────────────────────────────────────────
+    const token = store.get('token') as string | undefined;
+    if (token) {
+      try {
+        const apiRes = await axios.post(
+          `${API_BASE_URL}/api/sync/achievements`,
+          {
+            gameId:    ach.gameId,
+            key:       `${ach.source}_${ach.key}`,
+            name:      ach.name,
+            description: ach.description || '',
+            iconUrl:   ach.iconUrl,
+            isEarned:  true,
+            earnedAt:  ach.earnedAt ? new Date(ach.earnedAt).toISOString() : new Date().toISOString(),
+            source:    ach.source,
+          },
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 8000 }
+        );
+        if (apiRes.status < 200 || apiRes.status >= 300) {
+          log.warn(`[AchSync] Non-2xx from API: ${apiRes.status}`);
+        }
+      } catch (apiErr: any) {
+        log.warn(`[AchSync] API call failed (non-fatal): ${apiErr.message}`);
+      }
+    }
+
+    // ── Task 3: Popup Suppressor ─────────────────────────────────────────────
+    if (shouldShowPopups) {
+      if (store.get('overlayEnabled')) {
+        overlay?.showTrophy({
+          title: ach.name,
+          description: ach.description,
+          gameTitle: ach.gameTitle,
+          type: 'gold',
+          source: ach.source,
+          iconUrl: ach.iconUrl,
+          globalPercent: ach.globalPercent,
+          earnedAt: ach.earnedAt,
+        });
+      }
+
+      mainWindow?.webContents.send('achievement:unlocked', ach);
+      // Yield to make it satisfying (Optimization/Effect)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+  }
+
+  // If suppressed, send ONE summary event instead
+  if (!shouldShowPopups) {
+    mainWindow?.webContents.send('achievements:bulkUnlocked', {
+      count:    achievements.length,
+      gameId:   achievements[0]?.gameId,
+      gameName: achievements[0]?.gameName || achievements[0]?.gameTitle,
+    });
+  }
+
+  return { success: true };
+});
 ipcMain.handle('auth:setToken', async (_, token: string | null) => {
   if (!token) {
     store.delete('token');
@@ -464,6 +661,30 @@ ipcMain.handle('auth:setToken', async (_, token: string | null) => {
     const userId = res.data.id;
     store.set('userId', userId);
     log.info(`[Main] User logged in: ${res.data.username} (${userId})`);
+
+    // Check if new user (no badges earned yet)
+    try {
+      const badgeCount = await (prisma as any).userBadge.count({ where: { userId } });
+      if (badgeCount === 0) {
+        log.info(`[Main] New user detected: ${userId}. Awarding welcome badge.`);
+        await (prisma as any).userBadge.create({
+          data: {
+            userId,
+            badgeId: 'welcome_vault',
+            unlockedAt: new Date()
+          }
+        });
+        
+        overlay?.showTrophy({
+          title: 'Welcome to GameVault!',
+          description: 'You have taken your first step into the ultimate gaming vault.',
+          type: 'new_user_welcome',
+          source: 'first_launch'
+        });
+      }
+    } catch (err: any) {
+      log.error(`[Main] Failed to check/award welcome badge: ${err.message}`);
+    }
 
     // Restart tracker with new userId
     tracker = new GameTracker(detector, userId);
@@ -488,6 +709,14 @@ ipcMain.handle('library:discover', async () => {
 
 // ─── LAUNCH: Launch a game by ID ────────────────────────────────────────────
 async function handleLaunch(gameId: string, options?: { forceExe?: boolean }) {
+  const userId = store.get('userId') as string;
+  if (userId && gameId) {
+    // Fire-and-forget — do not await, do not block game launch
+    scanGameAchievementsOnce(gameId, userId).catch(err =>
+      log.warn(`[LazyAchScan] Unhandled error: ${err.message}`)
+    );
+  }
+
   try {
     log.info(`[Main] Launch request for ID: ${gameId}`);
     let game = await prisma.game.findUnique({ where: { id: gameId } })
@@ -571,6 +800,7 @@ async function handleLaunch(gameId: string, options?: { forceExe?: boolean }) {
         gogAppId: game.gogAppId ?? null,
         launchUri: game.launchUri ?? null,
         exePath: game.exePath ?? null,
+        source: game.source,
       });
       log.info(`[Main] Resolved launch method: ${config.method}`);
     }
@@ -649,10 +879,62 @@ ipcMain.handle('games:setExe', async (_, gameId: string) => {
 
   const exePath = result.filePaths[0]
 
-  await prisma.game.update({
-    where: { id: gameId },
-    data: { exePath },
-  })
+  let targetGameId = gameId;
+  let gameTitle = 'Unknown Game';
+  const game = await prisma.game.findUnique({ where: { id: gameId } });
+  
+  if (game) {
+    gameTitle = game.title;
+  } else {
+    log.info(`[Main] ID ${gameId} not found in local SQLite for setExe. Checking if it's a Cloud ID...`);
+    const token = store.get('token');
+    if (token) {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/games/${gameId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const cloudGame = res.data.game;
+        
+        if (cloudGame) {
+          gameTitle = cloudGame.title;
+          let localGame = null;
+          if (cloudGame.steamAppId) {
+            localGame = await prisma.game.findUnique({ where: { steamAppId: Number(cloudGame.steamAppId) } });
+          } else if (cloudGame.epicAppId) {
+            localGame = await prisma.game.findUnique({ where: { epicAppId: cloudGame.epicAppId } });
+          } else if (cloudGame.gogAppId) {
+            localGame = await prisma.game.findUnique({ where: { gogAppId: Number(cloudGame.gogAppId) } });
+          }
+          
+          if (localGame) {
+            targetGameId = localGame.id;
+            gameTitle = localGame.title;
+            log.info(`[Main] Resolved Cloud ID ${gameId} to local game ID ${targetGameId} for setExe`);
+          }
+        }
+      } catch (err: any) {
+        log.warn(`[Main] Failed to resolve Cloud ID in setExe: ${err.message}`);
+      }
+    }
+  }
+
+  const existingLocal = await prisma.game.findUnique({ where: { id: targetGameId } });
+  
+  if (existingLocal) {
+    await prisma.game.update({
+      where: { id: targetGameId },
+      data: { exePath },
+    });
+  } else {
+    await prisma.game.create({
+      data: {
+        id: targetGameId,
+        title: gameTitle,
+        exePath,
+        source: 'cloud'
+      },
+    });
+  }
 
   // Notify renderer that exe has been set
   mainWindow?.webContents.send('game:exeSet', { gameId, exePath })

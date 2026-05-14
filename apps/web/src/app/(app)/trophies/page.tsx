@@ -18,6 +18,9 @@ export default function TrophiesPage() {
   const [steamId, setSteamId] = useState<string | null>(null);
   const [epicId, setEpicId] = useState<string | null>(null);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [pendingOfflineAchs, setPendingOfflineAchs] = useState<any[]>([]);
+  const [poppingTrophy, setPoppingTrophy] = useState(false);
+  const [trophyFilter, setTrophyFilter] = useState<'all' | 'steam' | 'inapp'>('all');
 
   useEffect(() => {
     const fetchGameStats = async () => {
@@ -38,6 +41,14 @@ export default function TrophiesPage() {
     fetchGameStats();
   }, []);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).gameVault) {
+      (window as any).gameVault.onOfflineAchievementsDetected((data: any[]) => {
+        setPendingOfflineAchs(data);
+      });
+    }
+  }, []);
+
   const handleSelectGame = async (gameId: string) => {
     setSelectedGameId(gameId);
     setLoadingAchievements(true);
@@ -56,9 +67,77 @@ export default function TrophiesPage() {
     }
   };
 
+  const handlePopNextOffline = async () => {
+    if (pendingOfflineAchs.length === 0) return;
+    const current = pendingOfflineAchs[0];
+    setPoppingTrophy(true);
+    
+    (window as any).gameVault?.triggerTrophy({
+      title: current.name,
+      description: current.description,
+      gameTitle: current.gameTitle,
+      type: 'gold',
+      source: current.source,
+      iconUrl: current.iconUrl,
+      globalPercent: current.globalPercent,
+      earnedAt: current.earnedAt,
+    });
+    
+    (window as any).gameVault?.confirmOfflineAchievements([current]);
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    setPoppingTrophy(false);
+    setPendingOfflineAchs(prev => prev.slice(1));
+  };
+
+  const handlePopIndividual = async (ach: any) => {
+    setPoppingTrophy(true);
+    (window as any).gameVault?.triggerTrophy({
+      title: ach.name || ach.title,
+      description: ach.description,
+      gameTitle: gameStats.find(g => g.gameId === selectedGameId)?.title || 'Game',
+      type: 'gold',
+      source: ach.source,
+      iconUrl: ach.iconUrl,
+      globalPercent: ach.globalPercent,
+      earnedAt: ach.earnedAt,
+    });
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    setPoppingTrophy(false);
+  };
+
+  const handleMarkAsDone = async (ach: any) => {
+    if (window.confirm(`Mark "${ach.name || ach.title}" as done and pop trophy?`)) {
+      setPoppingTrophy(true);
+      
+      (window as any).gameVault?.triggerTrophy({
+        title: ach.name || ach.title,
+        description: ach.description,
+        gameTitle: gameStats.find(g => g.gameId === selectedGameId)?.title || 'Game',
+        type: 'gold',
+        source: ach.source || 'manual',
+        iconUrl: ach.iconUrl,
+        globalPercent: ach.globalPercent,
+        earnedAt: new Date(),
+      });
+      
+      setAchievements(prev => prev.map(a => 
+        a.key === ach.key ? { ...a, isEarned: true, earnedAt: new Date() } : a
+      ));
+      
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      setPoppingTrophy(false);
+    }
+  };
+
   const filteredGames = gameStats.filter(g => 
     g.title.toLowerCase().includes(search.toLowerCase())
   );
+
+  const filteredAchievements = achievements.filter(ach => {
+    if (trophyFilter === 'steam') return ach.isOfficial;
+    if (trophyFilter === 'inapp') return !ach.isOfficial;
+    return true;
+  });
 
   return (
     <div className="flex h-[calc(100vh-140px)] gap-6 animate-fade-in">
@@ -205,18 +284,55 @@ export default function TrophiesPage() {
 
               {/* Achievements Grid */}
               <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+                {/* Unique Toggle */}
+                <div className="flex gap-2 mb-6 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 w-fit">
+                  {(['all', 'steam', 'inapp'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setTrophyFilter(tab)}
+                      className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                        trophyFilter === tab 
+                          ? 'bg-[#fbbf24] text-[#0c0c1d] shadow-lg' 
+                          : 'text-[#64748b] hover:text-white'
+                      }`}
+                    >
+                      {tab === 'all' ? 'All Trophies' : tab === 'steam' ? 'Steam' : 'In-App'}
+                    </button>
+                  ))}
+                </div>
+
+                {pendingOfflineAchs.length > 0 && (
+                  <div className="mb-6 p-4 rounded-xl bg-[#fbbf24]/10 border border-[#fbbf24]/20 flex items-center justify-between animate-fade-in">
+                    <div>
+                      <h4 className="text-xs font-black text-white uppercase">Offline Trophies Detected</h4>
+                      <p className="text-[10px] text-[#64748b] font-bold mt-0.5">{pendingOfflineAchs.length} trophies found in local files. Pop them to sync.</p>
+                    </div>
+                    <button
+                      onClick={handlePopNextOffline}
+                      className="px-3 py-1.5 bg-[#fbbf24] text-[#0c0c1d] rounded-lg text-[10px] font-black uppercase hover:bg-[#fbbf24]/80 transition-colors"
+                    >
+                      Pop Next
+                    </button>
+                  </div>
+                )}
                 {loadingAchievements ? (
                   <div className="flex items-center justify-center h-full">
                     <GamingLoader message="Decrypting achievement data..." />
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {achievements.map((ach, idx) => (
+                    {filteredAchievements.map((ach, idx) => (
                       <motion.div
                         key={ach.key}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: idx * 0.02 }}
+                        onContextMenu={(e) => {
+                          if (!ach.isEarned) {
+                            e.preventDefault();
+                            handleMarkAsDone(ach);
+                          }
+                        }}
                         className={`group relative p-4 rounded-2xl border transition-all ${
                           ach.isEarned 
                             ? 'bg-gradient-to-br from-[#fbbf24]/10 to-transparent border-[#fbbf24]/20' 
@@ -236,16 +352,31 @@ export default function TrophiesPage() {
                           <div className="flex-1">
                             <div className="flex items-start justify-between">
                               <h4 className="text-[11px] font-black text-white leading-tight uppercase tracking-tight">{ach.name || ach.title}</h4>
-                              {ach.isOfficial && (
-                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-tighter">API</span>
+                              {ach.source && (
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter border ${
+                                  ach.source === 'steam' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                  ach.source === 'internal' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                  'bg-[#fbbf24]/10 text-[#fbbf24] border-[#fbbf24]/20'
+                                }`}>
+                                  {ach.source}
+                                </span>
                               )}
                             </div>
                             <p className="text-[10px] font-bold text-[#64748b] mt-1 line-clamp-2 leading-relaxed italic">{ach.description}</p>
                           </div>
                         </div>
                         {ach.isEarned && (
-                          <div className="absolute top-2 right-2">
+                          <div className="absolute top-2 right-2 flex items-center gap-2">
                              <Sparkles className="w-3 h-3 text-[#fbbf24] animate-pulse" />
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 handlePopIndividual(ach);
+                               }}
+                               className="text-[8px] font-black uppercase text-[#fbbf24] bg-[#fbbf24]/10 px-1.5 py-0.5 rounded border border-[#fbbf24]/20 hover:bg-[#fbbf24]/20 transition-all opacity-0 group-hover:opacity-100"
+                             >
+                               Pop
+                             </button>
                           </div>
                         )}
                         {ach.earnedAt && (
@@ -263,6 +394,26 @@ export default function TrophiesPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── Popping Trophy Dimmer ── */}
+      <AnimatePresence>
+        {poppingTrophy && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-[#030308]/90 backdrop-blur-sm flex flex-col items-center justify-center"
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-[#fbbf24]/5 border border-[#fbbf24]/10 flex items-center justify-center mb-6 mx-auto">
+                <Sparkles className="w-8 h-8 text-[#fbbf24] animate-pulse" />
+              </div>
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-1">Popping Trophy</h3>
+              <p className="text-[10px] font-black text-[#64748b] uppercase tracking-widest">Reliving the moment...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showSyncModal && (

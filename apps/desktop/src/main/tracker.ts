@@ -185,7 +185,8 @@ export class GameTracker extends EventEmitter {
     const game = await prisma.game.findUnique({ where: { id: this.expectedGame.gameId } });
     if (!game) return [];
 
-    const titleParts = game.title.toLowerCase().split(/\s+/).filter(p => p.length > 2);
+    const titleParts = game.title.toLowerCase().split(/\s+/).filter((p: string) => p.length > 2);
+    const pathParts = game.exePath?.toLowerCase().split(/[\\/]/).filter(p => p.length > 1 && !['binaries', 'win64', 'win32', 'x64', 'common', 'steamapps'].includes(p)) || [];
     const SYSTEM_IGNORED = ['electron', 'chrome', 'steam', 'epicgames', 'galaxy', 'discord', 'system', 'svchost', 'explorer', 'gamevault'];
     
     return processes.map(p => {
@@ -197,6 +198,15 @@ export class GameTracker extends EventEmitter {
       for (const part of titleParts) {
         if (name.includes(part)) score += 30;
       }
+      
+      // Heuristic for games with launchers (like b1.exe spawning b1-Win64-Shipping.exe)
+      for (const part of pathParts) {
+        const cleanPart = part.replace('.exe', '');
+        if (cleanPart.length > 1 && name.includes(cleanPart)) {
+          score += 60; // High score if it matches a folder name in the path!
+        }
+      }
+      
       return { processName: p.name, pid: p.pid, score };
     }).sort((a, b) => b.score - a.score);
   }

@@ -9,10 +9,44 @@ interface ResolvableGame {
   gogAppId?: number | string | null
   launchUri?: string | null
   exePath?: string | null
+  source?: string | null
 }
 
 export async function resolveLaunchConfig(game: ResolvableGame): Promise<LaunchConfig> {
-  // MASTER PRIORITY: Manual EXE provided by user
+  const { steamService } = await import('../services/steamService.js');
+  const isSteamInstalled = steamService.getPath() !== null;
+
+  // 1. PLATFORM PRIORITY FOR OFFICIAL GAMES
+  // If the game was imported from Steam/Epic/GOG and we have the ID, use the official launcher!
+  if (game.steamAppId && isSteamInstalled && game.source === 'steam') {
+    return {
+      gameId: game.id,
+      title: game.title,
+      method: 'steam',
+      steamAppId: game.steamAppId,
+    }
+  }
+  
+  if (game.epicAppId && game.source === 'epic') {
+    return {
+      gameId: game.id,
+      title: game.title,
+      method: 'epic',
+      epicAppId: game.epicAppId,
+      launchUri: game.launchUri ?? undefined,
+    }
+  }
+
+  if (game.gogAppId && game.source === 'gog') {
+    return {
+      gameId: game.id,
+      title: game.title,
+      method: 'gog',
+      gogAppId: game.gogAppId as any,
+    }
+  }
+
+  // 2. MASTER PRIORITY FOR MANUAL/CRACKED: Manual EXE provided by user or found by scanner
   if (game.exePath) {
     return {
       gameId: game.id,
@@ -22,10 +56,7 @@ export async function resolveLaunchConfig(game: ResolvableGame): Promise<LaunchC
     }
   }
 
-  // PLATFORM PRIORITY: Steam > Epic > GOG > Stove > URI
-  const { steamService } = await import('../services/steamService.js');
-  const isSteamInstalled = steamService.getPath() !== null;
-
+  // 3. FALLBACK TO PLATFORM IF NO EXE (even if source doesn't match)
   if (game.steamAppId && isSteamInstalled) {
     return {
       gameId: game.id,
@@ -41,8 +72,6 @@ export async function resolveLaunchConfig(game: ResolvableGame): Promise<LaunchC
       title: game.title,
       method: 'epic',
       epicAppId: game.epicAppId,
-      // Pass the stored launchUri — it contains the correct AppName for the protocol
-      // epicAppId is the CatalogNamespace (sandbox ID) used by the Achievement API, not for launch
       launchUri: game.launchUri ?? undefined,
     }
   }

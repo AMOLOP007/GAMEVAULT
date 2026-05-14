@@ -45,6 +45,83 @@ export async function hydrateGameMetadata(gameId: string, searchHint?: string, f
 
   const hasOfficialCover = game.coverUrl && !game.coverUrl.startsWith('data:');
   
+  // If it's a Steam game, prioritize Steam API for metadata
+  if (game.steamAppId) {
+    console.log(`[Metadata] Fetching metadata from Steam for AppID: ${game.steamAppId}`);
+    try {
+      const steamRes = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${game.steamAppId}`);
+      const data = steamRes.data[game.steamAppId.toString()];
+      if (data && data.success) {
+        const steamGame = data.data;
+        const verticalCover = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${game.steamAppId}/library_600x900.jpg`;
+        
+        await (prisma as any).game.update({
+          where: { id: gameId },
+          data: {
+            title: steamGame.name || game.title,
+            coverUrl: verticalCover,
+            genre: steamGame.genres?.map((g: any) => g.description).join(', ') || game.genre || 'Unknown',
+            description: steamGame.short_description || game.description || '',
+          }
+        });
+        console.log(`[Metadata] Successfully hydrated from Steam: ${game.title} → ${steamGame.name}`);
+        
+        // Also fetch achievements (waterfall)
+        await syncAchievements(gameId);
+        return; // Skip RAWG lookup!
+      }
+    } catch (err: any) {
+      console.error(`[Metadata] Failed to fetch from Steam for ${game.title}: ${err.message}`);
+      // Fallback to RAWG if Steam fails
+    }
+  }
+
+  // If it's an Epic game, prioritize Epic API for metadata
+  if (game.epicAppId) {
+    console.log(`[Metadata] Fetching metadata from Epic for SandboxId: ${game.epicAppId}`);
+    try {
+      const epicData = await fetchMetadataFromEpic(game.title);
+      if (epicData) {
+        await (prisma as any).game.update({
+          where: { id: gameId },
+          data: {
+            title: epicData.title || game.title,
+            coverUrl: epicData.coverUrl || game.coverUrl,
+            genre: epicData.genre || game.genre || 'Unknown',
+          }
+        });
+        console.log(`[Metadata] Successfully hydrated from Epic: ${game.title} → ${epicData.title}`);
+        await syncAchievements(gameId);
+        return; // Skip RAWG lookup!
+      }
+    } catch (err: any) {
+      console.error(`[Metadata] Failed to fetch from Epic for ${game.title}: ${err.message}`);
+    }
+  }
+
+  // If it's a GOG game, prioritize GOG API for metadata
+  if (game.gogAppId) {
+    console.log(`[Metadata] Fetching metadata from GOG for AppId: ${game.gogAppId}`);
+    try {
+      const gogData = await fetchMetadataFromGOG(game.title);
+      if (gogData) {
+        await (prisma as any).game.update({
+          where: { id: gameId },
+          data: {
+            title: gogData.title || game.title,
+            coverUrl: gogData.coverUrl || game.coverUrl,
+            genre: gogData.genre || game.genre || 'Unknown',
+          }
+        });
+        console.log(`[Metadata] Successfully hydrated from GOG: ${game.title} → ${gogData.title}`);
+        await syncAchievements(gameId);
+        return; // Skip RAWG lookup!
+      }
+    } catch (err: any) {
+      console.error(`[Metadata] Failed to fetch from GOG for ${game.title}: ${err.message}`);
+    }
+  }
+
   // Determine if title looks like an internal code (e.g., 'b1', 'gta5_exe', etc.)
   const titleIsGarbage = game.title.length <= 4 || /^[a-zA-Z]\d*$/.test(game.title);
 
@@ -325,6 +402,81 @@ export async function searchEpicSandboxId(title: string): Promise<string | null>
     return bestMatch.namespace;
   } catch (err) {
     console.error(`[EpicSearch] Failed for ${title}:`, err);
+    return null;
+  }
+}
+
+export async function fetchMetadataFromEpic(title: string): Promise<{ title: string, coverUrl?: string, genre?: string } | null> {
+  try {
+    const query = `
+      query searchStore($keywords: String!) {
+        Catalog {
+          searchStore(keywords: $keywords, count: 5) {
+            elements {
+              title
+              namespace
+              categories { path }
+              keyImages {
+                type
+                url
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const res = await axios.post('https://graphql.epicgames.com/graphql', {
+      query,
+      variables: { keywords: title }
+    });
+
+    const elements = res.data?.data?.Catalog?.searchStore?.elements;
+    if (!elements || elements.length === 0) return null;
+
+    const bestMatch = elements.find((e: any) => 
+      e.categories?.some((c: any) => c.path.includes('games')) || 
+      e.title.toLowerCase() === title.toLowerCase()
+    ) || elements[0];
+
+    const coverObj = bestMatch.keyImages?.find((img: any) => img.type === 'OfferImageTall' || img.type === 'Vault') || bestMatch.keyImages?.[0];
+    const genreList = bestMatch.categories?.map((c: any) => c.path.split('/').pop()).filter(Boolean).join(', ') || 'Unknown';
+
+    return {
+      title: bestMatch.title,
+      coverUrl: coverObj?.url,
+      genre: genreList
+    };
+  } catch (err) {
+    console.error(`[EpicMetadata] Failed for ${title}:`, err);
+    return null;
+  }
+}
+
+export async function fetchMetadataFromGOG(title: string): Promise<{ title: string, coverUrl?: string, genre?: string } | null> {
+  try {
+    const res = await axios.get(`https://embed.gog.com/games/ajax/filtered`, {
+      params: { search: title }
+    });
+    const games = res.data.products;
+    if (!games || games.length === 0) return null;
+
+    const bestMatch = games[0];
+    
+    let coverUrl = bestMatch.image;
+    if (coverUrl && coverUrl.startsWith('//')) {
+      coverUrl = `https:${coverUrl}`;
+    }
+
+    const genreList = bestMatch.genres?.join(', ') || 'Unknown';
+
+    return {
+      title: bestMatch.title,
+      coverUrl: coverUrl,
+      genre: genreList
+    };
+  } catch (err) {
+    console.error(`[GOGMetadata] Failed for ${title}:`, err);
     return null;
   }
 }

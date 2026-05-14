@@ -73,4 +73,9 @@ contextBridge.exposeInMainWorld('gameVault', {
     ipcRenderer.removeAllListeners('library:updated')
     ipcRenderer.on('library:updated', () => cb())
   },
+  onOfflineAchievementsDetected: (cb) => {
+    ipcRenderer.removeAllListeners('achievements:offlineDetected')
+    ipcRenderer.on('achievements:offlineDetected', (_, data) => cb(data))
+  },
+  confirmOfflineAchievements: (achievements) => ipcRenderer.invoke('achievements:confirmOffline', { achievements }),
 });

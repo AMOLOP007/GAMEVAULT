@@ -85,14 +85,14 @@ export class ChallengeService {
 
       // Get active challenges for this user
       const userChallenges = await (prisma as any).userChallenge.findMany({
-        where: { userId, status: 'ACTIVE' },
+        where: { userId },
         include: { challenge: true }
       });
 
       // Initialize missing user challenges
-      const activeChallengeIds = new Set(userChallenges.map((uc: any) => uc.challengeId));
+      const existingChallengeIds = new Set(userChallenges.map((uc: any) => uc.challengeId));
       for (const challenge of CHALLENGE_DEFINITIONS) {
-        if (!activeChallengeIds.has(challenge.id)) {
+        if (!existingChallengeIds.has(challenge.id)) {
           const uc = await (prisma as any).userChallenge.create({
             data: { userId, challengeId: challenge.id, status: 'ACTIVE' },
             include: { challenge: true }
@@ -102,6 +102,7 @@ export class ChallengeService {
       }
 
       for (const uc of userChallenges) {
+        if (uc.status !== 'ACTIVE') continue; // Only process active challenges
         const challenge = uc.challenge;
         if (challenge.type !== data.type && challenge.type !== 'STREAK') continue;
 

@@ -43,7 +43,7 @@ export default function PrivacyPage() {
                   <h3 className="font-black uppercase tracking-widest text-xs">Data Collection</h3>
                 </div>
                 <p className="text-sm leading-relaxed text-slate-400">
-                  We collect your email and username for authentication purposes. When using the Desktop App, we process game execution data locally to track playtime. This data is only uploaded to our cloud servers if you have a registered account and "Sync" enabled.
+                  We collect your email and username for authentication purposes. When using the Desktop App, we process game execution data locally to track playtime. This data is only uploaded to our cloud servers if you have a registered account and "Sync" enabled. To provide a complete experience, the app may also detect and set up achievement tracking for games in your library by checking local files and fetching achievement schemas from public sources. This process happens entirely on your device.
                 </p>
               </div>
 

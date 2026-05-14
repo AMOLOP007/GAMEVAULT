@@ -13,6 +13,9 @@ export interface BadgeDefinition {
 }
 
 export const BADGE_DEFINITIONS: BadgeDefinition[] = [
+  // Welcome Badge
+  { id: 'welcome_vault', name: 'Welcome to the Vault', description: 'Create your account and start your journey', icon: '🌟', rarity: 'COMMON', conditionType: 'ACCOUNT_CREATION', conditionValue: 1 },
+
   // Playtime Badges
   { id: 'first_step', name: 'First Step', description: 'Launch your first game through GameVault', icon: '🚀', rarity: 'COMMON', conditionType: 'TOTAL_SESSIONS', conditionValue: 1 },
   { id: 'warm_up', name: 'Warm Up', description: 'Accumulate 1 hour of total playtime', icon: '🔥', rarity: 'COMMON', conditionType: 'TOTAL_PLAYTIME', conditionValue: 3600 },
