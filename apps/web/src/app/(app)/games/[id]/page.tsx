@@ -48,7 +48,7 @@ export default function GameDetailsPage() {
 
   const game = data.game;
   const achievementCount = data.userAchievements?.length || 0;
-  const totalAchievements = game.achievements?.length || 0;
+  const totalAchievements = data.totalAchievements || game.achievements?.length || 0;
   const achievementProgress = totalAchievements > 0 ? (achievementCount / totalAchievements) * 100 : 0;
 
   return (

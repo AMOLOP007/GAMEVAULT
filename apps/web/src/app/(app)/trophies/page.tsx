@@ -70,11 +70,25 @@ export default function TrophiesPage() {
           steamAppId: selectedGame?.steamAppId
         });
         if (localAchs && localAchs.length > 0) {
-          setAchievements(localAchs.map((a: any) => ({
+          const mappedAchs = localAchs.map((a: any) => ({
             ...a,
             isOfficial: a.source === 'steam' || a.source === 'epic',
             title: a.name || a.title
-          })));
+          }));
+          setAchievements(mappedAchs);
+          
+          // Update stats in sidebar based on real local data
+          const earnedCount = mappedAchs.filter((a: any) => a.isEarned).length;
+          const totalCount = mappedAchs.length;
+          setGameStats(prev => prev.map(g => 
+            g.gameId === gameId ? { 
+              ...g, 
+              earned: earnedCount, 
+              total: totalCount, 
+              percentage: totalCount > 0 ? Math.min(100, Math.round((earnedCount / totalCount) * 100)) : 0
+            } : g
+          ));
+          
           setLoadingAchievements(false);
           return;
         }
@@ -156,6 +170,8 @@ export default function TrophiesPage() {
       setGameStats(prev => prev.map(g => 
         g.gameId === selectedGameId ? { ...g, earned: (g.earned || 0) + 1, percentage: Math.min(100, Math.round(((g.earned || 0) + 1) / g.total * 100)) } : g
       ));
+
+      const selectedGame = gameStats.find(g => g.gameId === selectedGameId);
       
       // Persist to local DB via Electron
       (window as any).gameVault?.markAchievementDone?.({
@@ -163,7 +179,9 @@ export default function TrophiesPage() {
         key: ach.key,
         name: ach.name || ach.title,
         description: ach.description,
-        iconUrl: ach.iconUrl
+        iconUrl: ach.iconUrl,
+        title: selectedGame?.title,
+        steamAppId: selectedGame?.steamAppId
       });
       
       await new Promise(resolve => setTimeout(resolve, 4000));

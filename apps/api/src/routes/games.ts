@@ -357,9 +357,14 @@ export default async function gameRoutes(fastify: FastifyInstance) {
       orderBy: { isEarned: 'desc' }
     });
 
+    const totalAchievements = await prisma.achievement.count({
+      where: { gameId: userGame.gameId }
+    });
+
     return {
       ...userGame,
-      userAchievements: achievements
+      userAchievements: achievements,
+      totalAchievements
     };
   });
 

@@ -594,7 +594,10 @@ ipcMain.handle('auth:getToken', () => store.get('token'));
 
 ipcMain.handle('achievements:get', async (_, gameId: string, payload?: any) => {
   const userId = store.get('userId') as string;
-  if (!userId) return [];
+  if (!userId) {
+    log.warn('[Main] achievements:get called but userId is missing');
+    return [];
+  }
   
   try {
     let localGameId = gameId;
@@ -617,9 +620,11 @@ ipcMain.handle('achievements:get', async (_, gameId: string, payload?: any) => {
       orderBy: { key: 'asc' }
     });
     
-    // 2. If empty, fetch achievement definitions from Steam
-    if (achievements.length === 0) {
-      let steamAppId = game?.steamAppId || payload?.steamAppId;
+    // 2. If empty or missing Steam achievements for a Steam game, fetch them
+    let steamAppId = game?.steamAppId || payload?.steamAppId;
+    const hasSteamAchs = achievements.some((a: any) => a.source === 'steam');
+    
+    if (achievements.length === 0 || (!hasSteamAchs && steamAppId)) {
       const gameTitle = game?.title || payload?.title;
       
       // Fallback: search Steam if missing AppID
@@ -731,16 +736,30 @@ ipcMain.handle('achievements:get', async (_, gameId: string, payload?: any) => {
   }
 });
 
-ipcMain.handle('achievements:markDone', async (_, { gameId, key, name, description, iconUrl }) => {
+ipcMain.handle('achievements:markDone', async (_, { gameId, key, name, description, iconUrl, title, steamAppId }) => {
   const userId = store.get('userId') as string;
   if (!userId) return { success: false, error: 'User not logged in' };
   
   try {
+    let localGameId = gameId;
+    let game = await prisma.game.findUnique({ where: { id: gameId } });
+    
+    // Resolve mismatch between Postgres ID and SQLite ID
+    if (!game && title) {
+      game = await prisma.game.findFirst({
+        where: { OR: [
+          { steamAppId: steamAppId ? Number(steamAppId) : -1 },
+          { title: title }
+        ]}
+      });
+      if (game) localGameId = game.id;
+    }
+
     const achievement = await (prisma as any).gameAchievement.upsert({
       where: {
         userId_gameId_key: {
           userId,
-          gameId,
+          gameId: localGameId,
           key
         }
       },
@@ -750,7 +769,7 @@ ipcMain.handle('achievements:markDone', async (_, { gameId, key, name, descripti
       },
       create: {
         userId,
-        gameId,
+        gameId: localGameId,
         key,
         name: name || 'Manually Unlocked',
         description: description || '',
@@ -763,6 +782,29 @@ ipcMain.handle('achievements:markDone', async (_, { gameId, key, name, descripti
     
     // Notify renderer
     mainWindow?.webContents.send('achievement:unlocked', achievement);
+    
+    // Sync to API
+    const token = store.get('token') as string | undefined;
+    if (token) {
+      try {
+        await axios.post(
+          `${API_BASE_URL}/api/sync/achievements`,
+          {
+            gameId: gameId,
+            key: key,
+            name: name || 'Manually Unlocked',
+            description: description || '',
+            iconUrl: iconUrl || '',
+            isEarned: true,
+            earnedAt: new Date().toISOString(),
+            source: 'manual',
+          },
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 8000 }
+        );
+      } catch (apiErr: any) {
+        log.warn(`[Main] API sync failed for markDone: ${apiErr.message}`);
+      }
+    }
     
     // Show overlay if enabled
     if (store.get('overlayEnabled')) {
@@ -930,6 +972,19 @@ ipcMain.handle('auth:setToken', async (_, token: string | null) => {
             unlockedAt: new Date()
           }
         });
+
+        // Sync to cloud
+        const token = store.get('token') as string;
+        if (token) {
+          try {
+            await axios.post(`${API_BASE_URL}/api/badges`, 
+              { badgeId: 'welcome_vault' },
+              { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 }
+            );
+          } catch (apiErr: any) {
+            log.warn(`[Main] API sync failed for welcome badge: ${apiErr.message}`);
+          }
+        }
 
         overlay?.showTrophy({
           title: 'Welcome to GameVault!',

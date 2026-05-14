@@ -1,6 +1,9 @@
 import prisma from '../db.js';
 import log from 'electron-log';
 import { TrophyOverlay } from '../overlay/TrophyOverlay.js';
+import store from '../store.js';
+import { API_BASE_URL } from '../config.js';
+import axios from 'axios';
 
 export interface BadgeDefinition {
   id: string;
@@ -107,6 +110,9 @@ export class BadgeService {
         let shouldUnlock = false;
 
         switch (badge.conditionType) {
+          case 'ACCOUNT_CREATION':
+            shouldUnlock = true;
+            break;
           case 'TOTAL_SESSIONS':
             shouldUnlock = user.sessions.length >= badge.conditionValue;
             break;
@@ -197,6 +203,19 @@ export class BadgeService {
         unlockedAt: new Date()
       }
     });
+
+    // Sync to cloud
+    const token = store.get('token') as string;
+    if (token) {
+      try {
+        await axios.post(`${API_BASE_URL}/api/badges`, 
+          { badgeId },
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 }
+        );
+      } catch (apiErr: any) {
+        log.warn(`[BadgeService] API sync failed for badge ${badgeId}: ${apiErr.message}`);
+      }
+    }
 
     this.overlay.showTrophy({
       title: `Badge Unlocked: ${badge.name}`,

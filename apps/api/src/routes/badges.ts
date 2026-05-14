@@ -24,4 +24,35 @@ export default async function badgeRoutes(fastify: FastifyInstance) {
       reply.status(500).send({ error: err.message });
     }
   });
+
+  // POST /api/badges - Unlock a badge
+  fastify.post('/', { preHandler: [(fastify as any).authenticate] }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const userId = (request as any).userId;
+      const { badgeId } = request.body as { badgeId: string };
+      
+      // Check if already unlocked
+      const existing = await (prisma as any).userBadge.findUnique({
+        where: {
+          userId_badgeId: { userId, badgeId }
+        }
+      });
+      
+      if (existing) {
+        return existing;
+      }
+      
+      const userBadge = await (prisma as any).userBadge.create({
+        data: {
+          userId,
+          badgeId,
+          unlockedAt: new Date()
+        }
+      });
+      
+      return userBadge;
+    } catch (err: any) {
+      reply.status(500).send({ error: err.message });
+    }
+  });
 }

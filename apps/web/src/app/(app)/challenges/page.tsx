@@ -10,6 +10,7 @@ type Tab = 'badges' | 'challenges';
 
 export default function ChallengesPage() {
   const [activeTab, setActiveTab] = useState<Tab>('challenges');
+  const [badgeFilter, setBadgeFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
   const [loading, setLoading] = useState(true);
   const [badges, setBadges] = useState<any[]>([]);
   const [challenges, setChallenges] = useState<any[]>([]);
@@ -140,11 +141,44 @@ export default function ChallengesPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6"
           >
-            {badges.map((badge, i) => (
-              <BadgeCard key={badge.id} badge={badge} index={i} />
-            ))}
+            {/* Badges Filter Toggles */}
+            <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl w-fit border border-white/5">
+              <button
+                onClick={() => setBadgeFilter('all')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  badgeFilter === 'all' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+                }`}
+              >
+                ALL
+              </button>
+              <button
+                onClick={() => setBadgeFilter('unlocked')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  badgeFilter === 'unlocked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+                }`}
+              >
+                UNLOCKED
+              </button>
+              <button
+                onClick={() => setBadgeFilter('locked')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  badgeFilter === 'locked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+                }`}
+              >
+                LOCKED
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+              {badges.filter(b => {
+                if (badgeFilter === 'unlocked') return b.isUnlocked;
+                if (badgeFilter === 'locked') return !b.isUnlocked;
+                return true;
+              }).map((badge, i) => (
+                <BadgeCard key={badge.id} badge={badge} index={i} />
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -215,19 +249,32 @@ function BadgeCard({ badge, index }: { badge: any, index: number }) {
 
   const color = rarityColors[badge.rarity] || '#94a3b8';
 
+  const handlePop = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isUnlocked) return;
+    
+    (window as any).gameVault?.triggerTrophy?.({
+      title: badge.name,
+      description: badge.description,
+      type: badge.rarity === 'LEGENDARY' ? 'platinum' : 'gold',
+      source: 'manual',
+      iconUrl: '' 
+    });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: index * 0.03 }}
-      className="flex flex-col items-center group"
+      className="flex flex-col items-center group relative"
     >
       <div className="relative mb-3">
         {/* Hexagon/Badge shape background */}
         <div 
           className={`w-20 h-20 rounded-2xl flex items-center justify-center text-3xl transition-all duration-500 border-2 ${
             isUnlocked 
-              ? `bg-[#0c0c1d] shadow-[0_0_30px_rgba(0,0,0,0.5)] group-hover:scale-110` 
+              ? `bg-[#0c0c1d] shadow-[0_0_30px_rgba(0,0,0,0.5)] group-hover:scale-105` 
               : 'bg-[#030308] border-white/5 opacity-40 grayscale'
           }`}
           style={{ 
@@ -240,6 +287,17 @@ function BadgeCard({ badge, index }: { badge: any, index: number }) {
           {!isUnlocked && (
             <div className="absolute inset-0 flex items-center justify-center">
               <Lock className="w-5 h-5 text-white/20" />
+            </div>
+          )}
+          
+          {isUnlocked && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 rounded-2xl">
+              <button 
+                onClick={handlePop}
+                className="px-3 py-1 bg-[#fbbf24] text-[#0c0c1d] text-[10px] font-black uppercase tracking-widest rounded-lg shadow-[0_0_10px_rgba(251,191,36,0.3)] hover:scale-105 transition-transform"
+              >
+                POP
+              </button>
             </div>
           )}
           
