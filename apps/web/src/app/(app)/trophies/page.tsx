@@ -152,6 +152,10 @@ export default function TrophiesPage() {
       setAchievements(prev => prev.map(a => 
         a.key === ach.key ? { ...a, isEarned: true, earnedAt: new Date() } : a
       ));
+
+      setGameStats(prev => prev.map(g => 
+        g.gameId === selectedGameId ? { ...g, earned: (g.earned || 0) + 1, percentage: Math.min(100, Math.round(((g.earned || 0) + 1) / g.total * 100)) } : g
+      ));
       
       // Persist to local DB via Electron
       (window as any).gameVault?.markAchievementDone?.({
@@ -197,13 +201,18 @@ export default function TrophiesPage() {
     g.title.toLowerCase().includes(search.toLowerCase())
   );
 
-  const filteredAchievements = achievements.filter(ach => {
-    const matchesFilter = trophyFilter === 'all' || 
-                         (trophyFilter === 'steam' && ach.isOfficial) || 
-                         (trophyFilter === 'inapp' && !ach.isOfficial);
-    const matchesSearch = (ach.name || ach.title || '').toLowerCase().includes(trophySearch.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const filteredAchievements = achievements
+    .filter(ach => {
+      const matchesFilter = trophyFilter === 'all' || 
+                           (trophyFilter === 'steam' && ach.isOfficial) || 
+                           (trophyFilter === 'inapp' && !ach.isOfficial);
+      const matchesSearch = (ach.name || ach.title || '').toLowerCase().includes(trophySearch.toLowerCase());
+      return matchesFilter && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (a.isEarned === b.isEarned) return 0;
+      return a.isEarned ? -1 : 1;
+    });
 
   return (
     <div className="flex h-[calc(100vh-140px)] gap-6 animate-fade-in">

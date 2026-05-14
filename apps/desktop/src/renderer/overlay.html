@@ -199,6 +199,17 @@
     .cine-content .icon-svg { width: 90px; height: 90px; }
     .cine-content .source-badge { width: 28px; height: 28px; font-size: 12px; bottom: -8px; right: -8px; }
 
+    /* Steam Fullscreen Cinematic Style */
+    .cine-content.steam-fullscreen .icon-wrapper {
+      border-color: #1b9bed;
+      box-shadow: 0 0 50px rgba(27, 155, 237, 0.6), inset 0 0 30px rgba(27, 155, 237, 0.3);
+    }
+    
+    .cine-content.steam-fullscreen #cine-title {
+      color: #1b9bed;
+      text-shadow: 0 0 20px rgba(27, 155, 237, 0.6);
+    }
+
     .platform-label {
       font-size: 11px;
       font-weight: 800;
@@ -522,7 +533,7 @@
     window.gameVault?.onTrophyShow((data) => {
       console.log('Trophy data:', data);
       
-      const isCinematic = data.type === 'new_user_welcome' || data.type === 'first_launch' || data.type === 'platinum' || data.type === 'grand_master';
+      const isCinematic = data.type === 'new_user_welcome' || data.type === 'first_launch' || data.type === 'platinum' || data.type === 'grand_master' || data.source === 'steam';
       
       setAccent(getColor(data.type, data.source));
       playSound(isCinematic ? 'cinematic' : 'standard');
@@ -552,6 +563,12 @@
           setTimeout(fireConfetti, 1000);
         } else {
           content.classList.remove('holographic');
+        }
+
+        if (data.source === 'steam') {
+          content.classList.add('steam-fullscreen');
+        } else {
+          content.classList.remove('steam-fullscreen');
         }
 
         container.classList.add('show');

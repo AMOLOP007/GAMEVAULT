@@ -14,6 +14,7 @@ module.exports = {
   productName: 'GameVault',
   copyright: 'Copyright © 2026 GameVault',
   artifactName: 'GameVault-Setup-${version}.exe',
+  electronVersion: "33.0.0",
 
   directories: {
     output: 'release',
