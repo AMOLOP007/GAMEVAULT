@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js';
 import jwt from 'jsonwebtoken';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function verifyGoogleTokenAndLogin(idToken: string) {
   if (!process.env.GOOGLE_CLIENT_ID) {
@@ -65,6 +65,7 @@ export async function verifyGoogleTokenAndLogin(idToken: string) {
     });
   }
 
+  if (!JWT_SECRET) throw new Error('JWT_SECRET not configured');
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
   
   return { 
