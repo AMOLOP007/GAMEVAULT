@@ -17,7 +17,7 @@ export interface BadgeDefinition {
 
 export const BADGE_DEFINITIONS: BadgeDefinition[] = [
   // Welcome Badge
-  { id: 'welcome_vault', name: 'Welcome to the Vault', description: 'Create your account and start your journey', icon: '🌟', rarity: 'COMMON', conditionType: 'ACCOUNT_CREATION', conditionValue: 1 },
+  { id: 'WELCOME', name: 'Welcome to the Vault', description: 'Create your account and start your journey', icon: '🌟', rarity: 'COMMON', conditionType: 'ACCOUNT_CREATION', conditionValue: 1 },
 
   // Playtime Badges
   { id: 'first_step', name: 'First Step', description: 'Launch your first game through GameVault', icon: '🚀', rarity: 'COMMON', conditionType: 'TOTAL_SESSIONS', conditionValue: 1 },
@@ -27,15 +27,15 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
   { id: 'veteran', name: 'Veteran', description: 'Accumulate 100 hours of total playtime', icon: '🎖️', rarity: 'RARE', conditionType: 'TOTAL_PLAYTIME', conditionValue: 360000 },
   { id: 'obsessed', name: 'Obsessed', description: 'Accumulate 500 hours of total playtime', icon: '👑', rarity: 'EPIC', conditionType: 'TOTAL_PLAYTIME', conditionValue: 1800000 },
   { id: 'legend', name: 'Legend', description: 'Accumulate 1000 hours of total playtime', icon: '💎', rarity: 'LEGENDARY', conditionType: 'TOTAL_PLAYTIME', conditionValue: 3600000 },
-  { id: 'marathon_runner', name: 'Marathon Runner', description: 'Play a single game for 6 hours in one session', icon: '🏃', rarity: 'RARE', conditionType: 'SINGLE_SESSION_PLAYTIME', conditionValue: 21600 },
-  { id: 'insomniac', name: 'Insomniac', description: 'Play past 2am', icon: '🌙', rarity: 'RARE', conditionType: 'PLAY_PAST_TIME', conditionValue: 2 }, // 2am
+  { id: 'MARATHON_RUNNER', name: 'Marathon Runner', description: 'Play a single game for 6 hours in one session', icon: '🏃', rarity: 'RARE', conditionType: 'SINGLE_SESSION_PLAYTIME', conditionValue: 21600 },
+  { id: 'NIGHT_OWL', name: 'Insomniac', description: 'Play past 2am', icon: '🌙', rarity: 'RARE', conditionType: 'PLAY_PAST_TIME', conditionValue: 2 }, // 2am
   { id: 'early_bird', name: 'Early Bird', description: 'Start a gaming session before 7am', icon: '🌅', rarity: 'RARE', conditionType: 'PLAY_BEFORE_TIME', conditionValue: 7 }, // 7am
 
   // Library Badges
-  { id: 'collector', name: 'Collector', description: 'Add 10 games to your library', icon: '📚', rarity: 'COMMON', conditionType: 'LIBRARY_COUNT', conditionValue: 10 },
+  { id: 'COLLECTOR_10', name: 'Collector', description: 'Add 10 games to your library', icon: '📚', rarity: 'COMMON', conditionType: 'LIBRARY_COUNT', conditionValue: 10 },
   { id: 'hoarder', name: 'Hoarder', description: 'Add 50 games to your library', icon: '📦', rarity: 'RARE', conditionType: 'LIBRARY_COUNT', conditionValue: 50 },
-  { id: 'the_vault', name: 'The Vault', description: 'Add 100 games to your library', icon: '🏦', rarity: 'EPIC', conditionType: 'LIBRARY_COUNT', conditionValue: 100 },
-  { id: 'genre_explorer', name: 'Genre Explorer', description: 'Play games from 5 different genres', icon: '🗺️', rarity: 'RARE', conditionType: 'GENRE_COUNT', conditionValue: 5 },
+  { id: 'VAULT_MASTER', name: 'The Vault', description: 'Add 100 games to your library', icon: '🏦', rarity: 'EPIC', conditionType: 'LIBRARY_COUNT', conditionValue: 100 },
+  { id: 'GENRE_EXPLORER', name: 'Genre Explorer', description: 'Play games from 5 different genres', icon: '🗺️', rarity: 'RARE', conditionType: 'GENRE_COUNT', conditionValue: 5 },
   { id: 'loyal', name: 'Loyal', description: 'Launch the same game 10 times', icon: '🐕', rarity: 'COMMON', conditionType: 'SINGLE_GAME_LAUNCHES', conditionValue: 10 },
   { id: 'one_true_game', name: 'One True Game', description: 'Accumulate 100 hours in a single game', icon: '💍', rarity: 'EPIC', conditionType: 'SINGLE_GAME_PLAYTIME', conditionValue: 360000 },
 
@@ -59,7 +59,7 @@ export class BadgeService {
     log.info('[BadgeService] Initializing badges in database...');
     for (const badge of BADGE_DEFINITIONS) {
       await (prisma as any).badge.upsert({
-        where: { id: badge.id },
+        where: { code: badge.id },
         update: {
           code: badge.id,
           name: badge.name,

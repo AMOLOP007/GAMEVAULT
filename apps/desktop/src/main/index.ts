@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, dialog } from 'electron';
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
 import { fileURLToPath } from 'url';
 import path from 'path';
 import store from './store.js';
@@ -33,6 +35,7 @@ const crackedAchEngine = new CrackedAchievementEngine();
 let overlay: TrophyOverlay | null = null;
 let tracker: GameTracker | null = null;
 const launcher = new GameLauncher();
+let syncService: SyncService | null = null;
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -93,17 +96,41 @@ function createMainWindow() {
     mainWindow?.show();
   });
 
-  // SECURITY: Content Security Policy — block inline scripts, restrict sources
+  // SECURITY: Content Security Policy — restrict sources strictly
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    // In dev, allow localhost; in production, only allow our known domains
+    const csp = isDev
+      ? "default-src 'self' http://localhost:* https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: http:; connect-src 'self' http://localhost:* https:"
+      : "default-src 'self' https://gamevault-web-lejg.vercel.app https://gamevault-j05d.onrender.com; script-src 'self' 'unsafe-inline' https://gamevault-web-lejg.vercel.app; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: http:; connect-src 'self' https://gamevault-web-lejg.vercel.app https://gamevault-j05d.onrender.com https://store.steampowered.com https://steamcommunity.com https://api.steampowered.com";
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': ["default-src 'self' http://localhost:* https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: http:; connect-src 'self' http://localhost:* https:"]
+        'Content-Security-Policy': [csp]
       }
     });
   });
 
   mainWindow.setMenuBarVisibility(false);
+
+  // SECURITY: Block navigation to unknown URLs
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowed = [WEB_BASE_URL, 'about:blank'];
+    if (!allowed.some(a => url.startsWith(a))) {
+      log.warn(`[Security] Blocked navigation to: ${url}`);
+      event.preventDefault();
+    }
+  });
+
+  // SECURITY: Block window.open (prevents external window exploits)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    log.warn(`[Security] Blocked window.open to: ${url}`);
+    return { action: 'deny' };
+  });
+
+  // SECURITY: Block webview tag
+  mainWindow.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -289,7 +316,7 @@ async function autoScanAndSync(userId: string) {
       } catch (err: any) {
         log.error(`[AutoScan] Missed achievement scan failed: ${err.message}`);
       }
-    }, 5000);
+    }, 8000);
   } catch (err) {
     log.error('[AutoScan] Failed:', err);
   } finally {
@@ -305,6 +332,14 @@ async function scanGameAchievementsOnce(gameId: string, userId: string): Promise
   sessionScannedGames.add(gameId);
 
   try {
+    // SESSION GATE: Must have at least one tracked GameVault session
+    const { hasValidSession } = await import('./achievements/SessionValidator.js');
+    const hasSession = await hasValidSession(userId, gameId);
+    if (!hasSession) {
+      log.info(`[LazyAchScan] No GameVault session for game ${gameId}. Skipping offline scan.`);
+      return;
+    }
+
     const offlineAchs = await crackedAchEngine.scanForOfflineAchievements(userId, gameId);
     if (offlineAchs.length === 0) return;
 
@@ -361,6 +396,7 @@ function enterGamingMode() {
   if (isGamingMode) return;
   isGamingMode = true;
   log.info('[GamingMode] ACTIVATED — suspending non-essential services');
+  syncService?.pauseSync();
   // Connectivity monitor will check this flag and skip
   // Badge evaluators deferred until session end
 }
@@ -369,6 +405,7 @@ function exitGamingMode() {
   if (!isGamingMode) return;
   isGamingMode = false;
   log.info('[GamingMode] DEACTIVATED — restoring full services');
+  syncService?.resumeSync();
 }
 
 function setupTracker() {
@@ -431,6 +468,16 @@ function setupTracker() {
 
     // ── Stop cracked achievement watcher ──────────────────────────────────
     crackedAchEngine.unwatch(data.gameId);
+
+    // POST-SESSION RESCAN: Emulators that only flush on exit
+    setTimeout(async () => {
+      try {
+        const newAchs = await crackedAchEngine.postSessionRescan(data.gameId);
+        if (newAchs.length > 0) {
+          log.info(`[Main] Post-session rescan found ${newAchs.length} new achievements for ${data.gameId}`);
+        }
+      } catch (err) {}
+    }, 10000);
 
     // Sync Steam trophies if it's a steam game
     const game = await prisma.game.findUnique({ where: { id: data.gameId } });
@@ -588,8 +635,42 @@ function setupTracker() {
   tracker.start();
 }
 
+// ── Auto Updater ──────────────────────────────
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('update-available', (info) => {
+  mainWindow?.webContents.send('update:available', info);
+});
+autoUpdater.on('update-downloaded', (info) => {
+  mainWindow?.webContents.send('update:downloaded', info);
+});
+autoUpdater.on('error', (err) => {
+  mainWindow?.webContents.send('update:error', err.message);
+});
 
 // ── IPC Handlers ──────────────────────────────
+ipcMain.handle('app:checkForUpdates', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, info: result?.updateInfo };
+  } catch (err: any) {
+    log.error(`Update check failed: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('app:installUpdate', () => {
+  autoUpdater.quitAndInstall();
+});
+ipcMain.handle('playtime:currentSession', () => {
+  return tracker?.currentSession ? {
+    gameId: tracker.currentSession.gameId,
+    duration: tracker.currentSession.duration,
+    startTime: tracker.currentSession.startTime
+  } : null;
+});
+
 ipcMain.handle('auth:getToken', () => store.get('token'));
 
 ipcMain.handle('achievements:get', async (_, gameId: string, payload?: any) => {
@@ -611,7 +692,20 @@ ipcMain.handle('achievements:get', async (_, gameId: string, payload?: any) => {
           { title: payload.title }
         ]}
       });
-      if (game) localGameId = game.id;
+      if (game) {
+        localGameId = game.id;
+      } else {
+        // Create the game locally so foreign key constraints pass when saving scraped achievements
+        game = await prisma.game.create({
+          data: {
+            id: localGameId, // Use the incoming Postgres ID
+            title: payload.title,
+            steamAppId: payload.steamAppId ? Number(payload.steamAppId) : null,
+            source: 'sync',
+            platform: 'PC'
+          }
+        });
+      }
     }
 
     // 1. Get from local DB
@@ -651,47 +745,50 @@ ipcMain.handle('achievements:get', async (_, gameId: string, payload?: any) => {
         log.info(`[Main] Fetching Steam achievements for AppID: ${steamAppId}`);
         const parsedAchievements: any[] = [];
         
-        // ── Scrape global achievements page (no API key needed) ──
+        // ── Fetch Steam XML achievements (provides API names like ACH_01 needed for local sync) ──
         try {
-          const url = `https://steamcommunity.com/stats/${steamAppId}/achievements/`;
+          const url = `https://steamcommunity.com/stats/${steamAppId}/achievements/?xml=1`;
           const response = await axios.get(url, {
             timeout: 10000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0' }
           });
           
-          const html = response.data as string;
-          // Split on achieveRow — the HTML uses class="achieveRow " with trailing space
-          const rows = html.split(/achieveRow/);
-          rows.shift(); // Remove everything before first achieveRow
+          const xml = response.data as string;
           
-          log.info(`[Main] HTML scrape found ${rows.length} achieveRow blocks`);
+          // Basic XML parsing with regex (fast and no extra dependency)
+          const achBlocks = xml.split('<achievement>');
+          achBlocks.shift(); // Remove header
           
-          for (const row of rows) {
-            const block = row.substring(0, 800);
-            const nameMatch = block.match(/<h3>([^<]+)<\/h3>/)?.[1];
-            const descMatch = block.match(/<h5>([^<]+)<\/h5>/)?.[1];
-            const iconMatch = block.match(/img src="(https:\/\/[^"]+)"/)?.[1];
+          log.info(`[Main] XML scrape found ${achBlocks.length} achievement blocks`);
+          
+          for (const block of achBlocks) {
+            const apiName = block.match(/<apiname><!\[CDATA\[(.*?)\]\]><\/apiname>/)?.[1] || 
+                            block.match(/<apiname>(.*?)<\/apiname>/)?.[1];
+            const displayName = block.match(/<name><!\[CDATA\[(.*?)\]\]><\/name>/)?.[1] || 
+                                block.match(/<name>(.*?)<\/name>/)?.[1];
+            const desc = block.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/)?.[1] || 
+                         block.match(/<description>(.*?)<\/description>/)?.[1];
+            const icon = block.match(/<iconClosed><!\[CDATA\[(.*?)\]\]><\/iconClosed>/)?.[1] || 
+                         block.match(/<iconClosed>(.*?)<\/iconClosed>/)?.[1];
             
-            if (nameMatch) {
+            if (apiName && displayName) {
               parsedAchievements.push({
                 userId,
                 gameId: localGameId,
-                key: `steam_${nameMatch.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`,
-                name: nameMatch.trim(),
-                description: descMatch?.trim() || '',
-                iconUrl: iconMatch || '',
+                key: apiName, // USE THE REAL API NAME (e.g. ACH_01 or 81001)
+                name: displayName.trim(),
+                description: desc?.trim() || '',
+                iconUrl: icon || '',
                 isEarned: false,
                 source: 'steam'
               });
             }
           }
           if (parsedAchievements.length > 0) {
-            log.info(`[Main] Scraped ${parsedAchievements.length} achievements from Steam HTML`);
+            log.info(`[Main] Parsed ${parsedAchievements.length} achievements from Steam XML`);
           }
         } catch (scrapeErr: any) {
-          log.warn(`[Main] Steam HTML scrape failed: ${scrapeErr.message}`);
+          log.warn(`[Main] Steam XML fetch failed: ${scrapeErr.message}.`);
         }
         
         // ── Save to DB ──
@@ -1466,8 +1563,14 @@ app.whenReady().then(() => {
   if (userId) {
     tracker = new GameTracker(detector, userId);
     setupTracker();
-    const syncService = new SyncService();
+    syncService = new SyncService();
     syncService.startSyncLoop();
+
+    // Background Sweep (Every 6 hours)
+    setInterval(async () => {
+      if (isGamingMode) return;
+      await crackedAchEngine.backgroundSweepAll(userId);
+    }, 6 * 60 * 60 * 1000);
   }
 
   // Auto-launch main window
@@ -1484,7 +1587,7 @@ app.whenReady().then(() => {
   async function runConnectivityCheck() {
     // Don't bother during active gaming — save CPU
     if (isGamingMode) {
-      connectivityTimer = setTimeout(runConnectivityCheck, 5 * 60 * 1000); // 5 min backoff
+      connectivityTimer = setTimeout(runConnectivityCheck, 10 * 60 * 1000); // 10 min backoff
       return;
     }
 
@@ -1501,8 +1604,8 @@ app.whenReady().then(() => {
       rawgUsagePercent: 0,
     });
 
-    // Offline → slower retry (2min). Online → normal 30s.
-    const nextInterval = online ? 30_000 : 2 * 60 * 1000;
+    // Offline → slower retry (2min). Online → normal 60s.
+    const nextInterval = online ? 60_000 : 2 * 60 * 1000;
     connectivityTimer = setTimeout(runConnectivityCheck, nextInterval);
   }
 

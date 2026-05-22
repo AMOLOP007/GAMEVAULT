@@ -2,6 +2,7 @@ import { dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
+import log from 'electron-log';
 import psList from 'ps-list';
 
 export interface DetectedGame {
@@ -70,7 +71,7 @@ export class GameDetector {
         return game;
       }
     } catch (error) {
-      console.error('RAWG Resolution error:', error);
+      log.error('RAWG Resolution error:', error);
     }
     return null;
   }

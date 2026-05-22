@@ -8,7 +8,7 @@ import path from 'path';
 
 const execAsync = promisify(exec);
 
-const IDLE_POLL_MS = 15000;     // 15 seconds when idle to save CPU
+const IDLE_POLL_MS = 30000;     // 30 seconds when idle to save CPU
 const GAMING_POLL_MS = 30000;   // 30 seconds when active
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds heartbeat
 
@@ -25,7 +25,8 @@ export interface TrackedSession {
 export class GameTracker extends EventEmitter {
   private detector: ProcessDetector;
   private userId: string;
-  private currentSession: TrackedSession | null = null;
+  public currentSession: TrackedSession | null = null;
+  private syncedPids = new Set<number>();
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private running = false;
@@ -52,7 +53,7 @@ export class GameTracker extends EventEmitter {
     if (this.pollTimer) clearTimeout(this.pollTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.currentSession) {
-      this.endCurrentSession('VAULT_CLOSED').catch(console.error);
+      this.endCurrentSession('VAULT_CLOSED').catch((e) => log.error('[Tracker] Session end failed:', e));
     }
     log.info('[Tracker] Stopped');
   }
@@ -162,7 +163,9 @@ export class GameTracker extends EventEmitter {
   private async syncStartTimeWithOS(pid: number) {
     if (!this.currentSession || process.platform !== 'win32') return;
     const safePid = Math.floor(Math.abs(pid));
-    if (safePid <= 0) return;
+    if (safePid <= 0 || this.syncedPids.has(safePid)) return;
+    
+    this.syncedPids.add(safePid);
 
     try {
       const { stdout } = await execAsync(
@@ -213,6 +216,8 @@ export class GameTracker extends EventEmitter {
 
   async startSession(gameId: string, pid?: number) {
     if (this.currentSession) await this.endCurrentSession('NORMAL');
+
+    this.syncedPids.clear();
 
     log.info(`[Tracker] Starting session for ${gameId}`);
     const session = await (prisma.playSession as any).create({

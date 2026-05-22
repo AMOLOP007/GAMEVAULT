@@ -40,10 +40,10 @@ export default function PrivacyPage() {
               <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
                 <div className="flex items-center gap-3 text-[#34d399]">
                   <Lock className="w-5 h-5" />
-                  <h3 className="font-black uppercase tracking-widest text-xs">Data Collection</h3>
+                  <h3 className="font-black uppercase tracking-widest text-xs">Data Collection & Updates</h3>
                 </div>
                 <p className="text-sm leading-relaxed text-slate-400">
-                  We collect your email and username for authentication purposes. When using the Desktop App, we process game execution data locally to track playtime. This data is only uploaded to our cloud servers if you have a registered account and "Sync" enabled. To provide a complete experience, the app may also detect and set up achievement tracking for games in your library by checking local files and fetching achievement schemas from public sources. This process happens entirely on your device.
+                  We collect your email and username for authentication purposes. When using the Desktop App, we process game execution data locally to track playtime, keeping your local storage strictly optimized. This data is only uploaded to our cloud servers if you have a registered account and "Sync" enabled. Our app features a built-in Auto-Updater which occasionally checks our GitHub releases for software updates securely. Furthermore, local achievement tracking works entirely offline on your device.
                 </p>
               </div>
 

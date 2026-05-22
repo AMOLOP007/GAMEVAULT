@@ -1,6 +1,7 @@
 import { PrismaClient } from 'prisma-client-desktop/index.js';
-import { resolveAchievementPath } from './PathResolver.js';
+import { resolveAllAchievementPaths } from './PathResolver.js';
 import { readAchievements, diffAchievements, AchievementState } from './AchievementReader.js';
+import { areAchievementsPlausible } from './SessionValidator.js';
 import axios from 'axios';
 import log from 'electron-log';
 import { API_BASE_URL } from '../config.js';
@@ -37,13 +38,22 @@ export async function scanOnStartup(watchedGames: WatchedGame[], db: any, userId
     try {
       log.info(`[StartupScan] Scanning for ${game.title}`);
       
-      const resolved = await resolveAchievementPath(game.steamAppId, path.dirname(game.exePath));
-      if (!resolved) {
-        log.info(`[StartupScan] No achievement path found for ${game.title}`);
+      const resolvedPaths = await resolveAllAchievementPaths(game.steamAppId, path.dirname(game.exePath));
+      if (resolvedPaths.length === 0) {
+        log.info(`[StartupScan] No achievement paths found for ${game.title}`);
         continue;
       }
 
-      const currentAchievements = await readAchievements(resolved.filePath, resolved.format);
+      let currentAchievements: AchievementState[] = [];
+      let emulator = 'unknown';
+      for (const rp of resolvedPaths) {
+         const state = await readAchievements(rp.filePath, rp.format);
+         if (state.length > currentAchievements.length) {
+            currentAchievements = state;
+            emulator = rp.emulator;
+         }
+      }
+
       if (currentAchievements.length === 0) continue;
 
       // Query DB for already unlocked achievements
@@ -52,7 +62,7 @@ export async function scanOnStartup(watchedGames: WatchedGame[], db: any, userId
       });
       
       const prevMapped: AchievementState[] = earnedInDb.map((a: any) => ({
-        id: a.key.replace(`${resolved.emulator}_`, ''), // Strip emulator prefix if stored that way
+        id: a.key.replace(`${emulator}_`, ''), // Strip emulator prefix if stored that way
         unlocked: true
       }));
 
@@ -60,16 +70,29 @@ export async function scanOnStartup(watchedGames: WatchedGame[], db: any, userId
 
       if (newlyUnlocked.length > 0) {
         log.info(`[StartupScan] Found ${newlyUnlocked.length} new achievements for ${game.title}`);
-        
+
+        // ── ANTI-CHEAT GATE ───────────────────────────────────────────────────
+        // Heuristically check if this looks like a downloaded 100% save file
+        const isPlausible = areAchievementsPlausible(newlyUnlocked);
+
+        if (!isPlausible) {
+          log.warn(`[StartupScan] Blocked ${newlyUnlocked.length} offline achievements for ${game.title} due to anti-cheat heuristics.`);
+          continue; // Skip this game entirely
+        }
+
+        const validated = newlyUnlocked; // All pass if the batch passes
+        log.info(`[StartupScan] Validated ${validated.length} offline achievements for ${game.title}`);
+        // ── END ANTI-CHEAT GATE ───────────────────────────────────────────────
+
         report.push({
           gameId: game.gameId,
           gameName: game.title,
-          achievements: newlyUnlocked
+          achievements: validated
         });
 
-        // Upsert to DB
-        for (const ach of newlyUnlocked) {
-          const dbKey = `${resolved.emulator}_${ach.id}`;
+        // Upsert validated achievements to DB
+        for (const ach of validated) {
+          const dbKey = `${emulator}_${ach.id}`;
           try {
             await (db as any).gameAchievement.upsert({
               where: {
@@ -91,7 +114,7 @@ export async function scanOnStartup(watchedGames: WatchedGame[], db: any, userId
                 description: '',
                 isEarned: true,
                 earnedAt: ach.unlockTime ? new Date(ach.unlockTime * 1000) : new Date(),
-                source: resolved.emulator
+                source: emulator
               }
             });
 
@@ -103,7 +126,7 @@ export async function scanOnStartup(watchedGames: WatchedGame[], db: any, userId
                 name: ach.id,
                 isEarned: true,
                 earnedAt: ach.unlockTime ? new Date(ach.unlockTime * 1000).toISOString() : new Date().toISOString(),
-                source: resolved.emulator
+                source: emulator
               });
             } catch (apiErr: any) {
               log.warn(`[StartupScan] API sync failed for ${ach.id}: ${apiErr.message}`);

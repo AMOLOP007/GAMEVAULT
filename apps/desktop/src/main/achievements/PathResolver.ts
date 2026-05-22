@@ -32,7 +32,18 @@ export interface ResolvedPath {
   fileMissing?: boolean;
 }
 
-export async function resolveAchievementPath(steamAppId: number | null, installDir: string): Promise<ResolvedPath | null> {
+export async function resolveAllAchievementPaths(steamAppId: number | null, installDir: string): Promise<ResolvedPath[]> {
+  const results: ResolvedPath[] = [];
+  const seenPaths = new Set<string>();
+
+  const addResult = (pathStr: string, format: 'json' | 'ini', emulator: string, fileMissing = false) => {
+    const normalized = path.normalize(pathStr).toLowerCase();
+    if (!seenPaths.has(normalized)) {
+      seenPaths.add(normalized);
+      results.push({ filePath: pathStr, format, emulator, fileMissing });
+    }
+  };
+
   let appIdStr = steamAppId ? String(steamAppId) : null;
 
   // Helper to check for steam_appid.txt in dir or parents
@@ -43,13 +54,73 @@ export async function resolveAchievementPath(steamAppId: number | null, installD
     }
   }
 
-  if (!appIdStr) {
-    log.info(`[PathResolver] No AppID provided or found for ${installDir}`);
-    return null;
+  // ── LAYER 1: Check Environment Variable Paths (Global Saves) ──────────────────────────────
+  log.info(`[PathResolver] Layer 1: Checking standard environment paths`);
+  
+  const appdata = process.env.APPDATA || '';
+  const localAppdata = process.env.LOCALAPPDATA || '';
+  const programData = process.env.PROGRAMDATA || 'C:\\ProgramData';
+  const publicDocs = path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Documents');
+
+  if (appIdStr) {
+    // 1. Static Paths
+    const staticPaths = [
+      { path: path.join(appdata, 'CreamAPI', appIdStr, 'achievements.json'), format: 'json', emulator: 'creamapi' },
+      { path: path.join(localAppdata, 'EMPRESS', appIdStr, 'achievements.json'), format: 'json', emulator: 'empress' },
+      { path: path.join(appdata, 'OnlineFix', appIdStr, 'achievements.json'), format: 'json', emulator: 'onlinefix' },
+      { path: path.join(appdata, '3DM', appIdStr, 'achievements.json'), format: 'json', emulator: '3dm' },
+      { path: path.join(publicDocs, 'Steam', 'TENOKE', appIdStr, 'achievements.ini'), format: 'ini', emulator: 'tenoke' },
+      { path: path.join(publicDocs, 'Steam', 'CODEX', appIdStr, 'achievements.ini'), format: 'ini', emulator: 'codex' },
+      { path: path.join(publicDocs, 'Steam', 'RUNE', appIdStr, 'achievements.ini'), format: 'ini', emulator: 'rune' },
+      { path: path.join(publicDocs, 'Steam', 'SKIDROW', appIdStr, 'achievements.ini'), format: 'ini', emulator: 'skidrow' },
+      { path: path.join(publicDocs, 'Steam', 'FLT', appIdStr, 'achievements.ini'), format: 'ini', emulator: 'flt' },
+    ];
+
+    for (const p of staticPaths) {
+      if (fs.existsSync(p.path)) {
+        log.info(`[PathResolver] Found global progress file: ${p.path}`);
+        addResult(p.path, p.format as any, p.emulator);
+      }
+    }
+
+    // 2. Wildcard paths for Goldberg GSE
+    const gseBase = path.join(appdata, 'GSE Saves');
+    if (fs.existsSync(gseBase)) {
+      try {
+        const dirs = fs.readdirSync(gseBase);
+        for (const dir of dirs) {
+          const achPath = path.join(gseBase, dir, appIdStr, 'achievements.json');
+          if (fs.existsSync(achPath)) addResult(achPath, 'json', 'goldberg');
+        }
+        const directPath = path.join(gseBase, appIdStr, 'achievements.json');
+        if (fs.existsSync(directPath)) addResult(directPath, 'json', 'goldberg');
+      } catch (e) {}
+    }
+
+    // 3. Wildcard paths for Goldberg SteamEmu
+    const gseEmuBase = path.join(appdata, 'Goldberg SteamEmu Saves');
+    if (fs.existsSync(gseEmuBase)) {
+      try {
+        const dirs = fs.readdirSync(gseEmuBase);
+        for (const dir of dirs) {
+          const achPath = path.join(gseEmuBase, dir, appIdStr, 'achievements.json');
+          if (fs.existsSync(achPath)) addResult(achPath, 'json', 'goldberg');
+        }
+        const directPath = path.join(gseEmuBase, appIdStr, 'achievements.json');
+        if (fs.existsSync(directPath)) addResult(directPath, 'json', 'goldberg');
+      } catch (e) {}
+    }
   }
 
-  // ── LAYER 1: Scan Install Directory and Parents ────────────────────────────
-  log.info(`[PathResolver] Layer 1: Scanning install dir and parents: ${installDir}`);
+  // 4. Voices38 UE / Custom Variant (e.g. Voices of the Void)
+  const gameFolderName = path.basename(installDir);
+  const uePath = path.join(localAppdata, gameFolderName, 'Saved', 'data.sav');
+  if (fs.existsSync(uePath)) {
+    addResult(uePath, 'json', 'voices38_ue');
+  }
+
+  // ── LAYER 2: Scan Install Directory and Parents ────────────────────────────
+  log.info(`[PathResolver] Layer 2: Scanning install dir and parents: ${installDir}`);
   
   const patterns = [
     'steam_settings/achievements.json',
@@ -62,108 +133,58 @@ export async function resolveAchievementPath(steamAppId: number | null, installD
   ];
 
   let currentDir = installDir;
-  for (let i = 0; i < 8; i++) { // Scan up to 8 levels
-    if (currentDir.endsWith(':\\') || currentDir.endsWith(':/')) break; // Prevent scanning entire drive
+  for (let i = 0; i < 8; i++) {
+    if (currentDir.endsWith(':\\') || currentDir.endsWith(':/')) break;
     
-    // Hardcoded check for specific paths to avoid glob failures
     const specificPath = path.join(currentDir, 'Engine/Binaries/ThirdParty/Steamworks/Steamv151/Win64/steam_settings/achievements.json');
     if (fs.existsSync(specificPath)) {
-      log.info(`[PathResolver] Found hardcoded achievement path: ${specificPath}`);
-      return { filePath: specificPath, format: 'json', emulator: 'goldberg' };
+      addResult(specificPath, 'json', 'goldberg');
     }
 
     try {
       const files = await fg(patterns, { cwd: currentDir, absolute: true, caseSensitiveMatch: false });
       
-      let foundAchievements = false;
       for (const file of files) {
         const filename = path.basename(file).toLowerCase();
         
         if (filename === 'achievements.json') {
-          return { filePath: file, format: 'json', emulator: 'goldberg_or_creamapi' };
-        }
-        
-        if (filename.endsWith('.ini')) {
+          addResult(file, 'json', 'goldberg_or_creamapi');
+        } else if (filename.endsWith('.ini')) {
           const savePath = extractSavePathFromIni(file);
           if (savePath && fs.existsSync(savePath)) {
             const format = detectEmulatorFormat(savePath);
-            return { filePath: savePath, format: format !== 'unknown' ? format : 'ini', emulator: 'custom_via_ini' };
+            addResult(savePath, format !== 'unknown' ? format : 'ini', 'custom_via_ini');
           }
-          return { filePath: file, format: 'ini', emulator: 'generic_ini' };
-        }
-        
-        if (filename.endsWith('.bin')) {
-          return { filePath: file, format: 'ini', emulator: 'smartsteam' };
+          addResult(file, 'ini', 'generic_ini');
+        } else if (filename.endsWith('.bin')) {
+          addResult(file, 'ini', 'smartsteam');
         }
       }
 
-      // If we didn't find achievements.json, check if the folder exists (missing file case)
       const steamSettingsDir = path.join(currentDir, 'steam_settings');
       if (fs.existsSync(steamSettingsDir) && !fs.existsSync(path.join(steamSettingsDir, 'achievements.json'))) {
-        return { filePath: path.join(steamSettingsDir, 'achievements.json'), format: 'json', emulator: 'goldberg', fileMissing: true };
+        addResult(path.join(steamSettingsDir, 'achievements.json'), 'json', 'goldberg', true);
       }
 
-      // Check Unreal Engine specific path missing file
       const ueDirs = await fg('Engine/Binaries/ThirdParty/Steamworks/Steamv*/Win64/steam_settings', { cwd: currentDir, absolute: true, onlyDirectories: true });
       if (ueDirs.length > 0) {
         const ueDir = ueDirs[0];
         if (!fs.existsSync(path.join(ueDir, 'achievements.json'))) {
-          return { filePath: path.join(ueDir, 'achievements.json'), format: 'json', emulator: 'goldberg', fileMissing: true };
+          addResult(path.join(ueDir, 'achievements.json'), 'json', 'goldberg', true);
         }
       }
 
     } catch (err: any) {
-      log.warn(`[PathResolver] Layer 1 scan failed at ${currentDir}: ${err.message}`);
+      log.warn(`[PathResolver] Layer 2 scan failed at ${currentDir}: ${err.message}`);
     }
     
     const parent = path.dirname(currentDir);
-    if (parent === currentDir || currentDir.endsWith(':\\') || currentDir.endsWith(':/')) break; // Reached root or drive root
+    if (parent === currentDir || currentDir.endsWith(':\\') || currentDir.endsWith(':/')) break;
     currentDir = parent;
   }
 
-  // ── LAYER 2: Check Environment Variable Paths ──────────────────────────────
-  log.info(`[PathResolver] Layer 2: Checking standard environment paths`);
-  
-  const appdata = process.env.APPDATA || '';
-  const programData = process.env.PROGRAMDATA || 'C:\\ProgramData';
-  const publicDocs = path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Documents');
-
-  const layer2Paths: { path: string; format: 'json' | 'ini'; emulator: string }[] = [
-    {
-      path: path.join(publicDocs, 'Steam', 'TENOKE', appIdStr, 'achievements.ini'),
-      format: 'ini',
-      emulator: 'tenoke'
-    },
-    {
-      path: path.join(appdata, 'Goldberg SteamEmu Saves', appIdStr, 'achievements.json'),
-      format: 'json',
-      emulator: 'goldberg'
-    },
-    {
-      path: path.join(programData, 'CODEX', appIdStr, 'achievements.ini'),
-      format: 'ini',
-      emulator: 'codex'
-    },
-    {
-      path: path.join(appdata, 'EMPRESS', appIdStr, 'achiev.json'),
-      format: 'json',
-      emulator: 'empress'
-    },
-    {
-      path: path.join(programData, 'RLD!', appIdStr, 'achievements.ini'),
-      format: 'ini',
-      emulator: 'rld'
-    }
-  ];
-
-  for (const p of layer2Paths) {
-    if (fs.existsSync(p.path)) {
-      return { filePath: p.path, format: p.format, emulator: p.emulator };
-    }
-  }
-
   // ── LAYER 3: Registry Scan (Windows Only) ──────────────────────────────────
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' && appIdStr) {
     log.info(`[PathResolver] Layer 3: Checking registry`);
     
     const regChecks = [
@@ -179,16 +200,19 @@ export async function resolveAchievementPath(steamAppId: number | null, installD
           const basePath = match[1].trim();
           const fullPath = path.join(basePath, appIdStr, check.emulator === 'goldberg' ? 'achievements.json' : 'achiev.json');
           if (fs.existsSync(fullPath)) {
-            return { filePath: fullPath, format: check.emulator === 'goldberg' ? 'json' : 'json', emulator: check.emulator };
+            addResult(fullPath, 'json', check.emulator);
           }
         }
-      } catch (err: any) {
-        // Ignore errors if key not found
-      }
+      } catch (err: any) {}
     }
   }
 
-  return null;
+  return results;
+}
+
+export async function resolveAchievementPath(steamAppId: number | null, installDir: string): Promise<ResolvedPath | null> {
+  const paths = await resolveAllAchievementPaths(steamAppId, installDir);
+  return paths.length > 0 ? paths[0] : null;
 }
 
 function extractSavePathFromIni(iniPath: string): string | null {

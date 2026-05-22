@@ -476,7 +476,8 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
             source: 'folder_scan' as const,
             installPath: gameFolder,
             platform: 'PC',
-            iconUrl
+            iconUrl,
+            steamAppId: g.steamAppId
           };
         }));
 
@@ -505,6 +506,7 @@ export async function discoverFromCommonFolders(): Promise<DiscoveredGame[]> {
         source: 'folder_scan' as const,
         installPath: path.dirname(g.exePath),
         platform: 'PC',
+        steamAppId: g.steamAppId,
       })));
     } catch {}
   }

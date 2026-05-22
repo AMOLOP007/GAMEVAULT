@@ -2,17 +2,29 @@ import axios from 'axios';
 import Store from './store.js';
 import prisma from './db.js';
 import { API_BASE_URL } from './config.js';
+import log from 'electron-log';
 const store = Store;
 
 export class SyncService {
   private syncTimer: ReturnType<typeof setInterval> | null = null;
+  private isPaused = false;
 
   startSyncLoop() {
     this.syncTimer = setInterval(async () => {
-      if (store.get('syncEnabled')) {
+      if (store.get('syncEnabled') && !this.isPaused) {
         await this.syncWithSupabase();
       }
-    }, 60000); // Every 60s
+    }, 120000); // Every 120s
+  }
+
+  pauseSync() {
+    this.isPaused = true;
+    log.info('[Sync] Sync loop paused (gaming mode)');
+  }
+
+  resumeSync() {
+    this.isPaused = false;
+    log.info('[Sync] Sync loop resumed');
   }
 
   stopSyncLoop() {
@@ -54,9 +66,11 @@ export class SyncService {
         });
       }
 
-      console.log(`[Sync] Synced ${unsyncedSessions.length} sessions and ${unsyncedAchievements.length} achievements`);
-    } catch (error) {
-      console.error('[Sync] Error syncing with Supabase:', error);
+      if (unsyncedSessions.length > 0 || unsyncedAchievements.length > 0) {
+        log.info(`[Sync] Synced ${unsyncedSessions.length} sessions and ${unsyncedAchievements.length} achievements`);
+      }
+    } catch (error: any) {
+      log.error(`[Sync] Error syncing with Supabase: ${error.message}`);
     }
   }
 }

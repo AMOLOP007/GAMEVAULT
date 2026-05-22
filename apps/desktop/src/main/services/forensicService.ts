@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import log from 'electron-log';
 import fs from 'fs/promises';
 
 const execAsync = promisify(exec);
@@ -36,7 +37,7 @@ export class ForensicService {
         steamLogs
       };
     } catch (err) {
-      console.error('[ForensicService] Failed to gather evidence:', err);
+      log.error(`[ForensicService] Failed to gather evidence: ${err}`);
       return null;
     }
   }

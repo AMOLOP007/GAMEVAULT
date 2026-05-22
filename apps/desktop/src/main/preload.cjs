@@ -2,10 +2,23 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 console.log('[Preload] GameVault bridge initializing (CJS)...');
 
+// SECURITY: Input validation helpers
+function validateString(val, maxLen = 500) {
+  if (typeof val !== 'string') return '';
+  return val.slice(0, maxLen);
+}
+
+function validatePayload(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  return obj;
+}
 contextBridge.exposeInMainWorld('gameVault', {
   // Auth
   getToken: () => ipcRenderer.invoke('auth:getToken'),
-  setToken: (token) => ipcRenderer.invoke('auth:setToken', token),
+  setToken: (token) => {
+    if (token !== null && typeof token !== 'string') return Promise.reject(new Error('Invalid token'));
+    return ipcRenderer.invoke('auth:setToken', token);
+  },
 
   // Games
   openFolderDialog: () => ipcRenderer.invoke('games:openFolderDialog'),
@@ -16,9 +29,20 @@ contextBridge.exposeInMainWorld('gameVault', {
   getCurrentSession: () => ipcRenderer.invoke('playtime:currentSession'),
 
   // Achievements
-  getAchievements: (gameId, payload) => ipcRenderer.invoke('achievements:get', gameId, payload),
-  markAchievementDone: (payload) => ipcRenderer.invoke('achievements:markDone', payload),
-  addCustomChallenge: (challenge) => ipcRenderer.invoke('challenges:add', challenge),
+  getAchievements: (gameId, payload) => {
+    if (typeof gameId !== 'string') return Promise.reject(new Error('Invalid gameId'));
+    return ipcRenderer.invoke('achievements:get', validateString(gameId), validatePayload(payload));
+  },
+  markAchievementDone: (payload) => {
+    if (!payload || typeof payload.key !== 'string' || typeof payload.gameId !== 'string') {
+      return Promise.reject(new Error('Invalid achievement payload: key and gameId required'));
+    }
+    return ipcRenderer.invoke('achievements:markDone', payload);
+  },
+  addCustomChallenge: (challenge) => {
+    if (!challenge || typeof challenge !== 'object') return Promise.reject(new Error('Invalid challenge'));
+    return ipcRenderer.invoke('challenges:add', challenge);
+  },
 
   // Overlay
   triggerTrophy: (data) => ipcRenderer.invoke('overlay:triggerTrophy', data),
@@ -53,6 +77,22 @@ contextBridge.exposeInMainWorld('gameVault', {
   syncLocalAchievements: (gameId, exePath) => ipcRenderer.invoke('sync:localAchievements', { gameId, exePath }),
   getApiUsage: () => ipcRenderer.invoke('api:getUsage'),
 
+  // Updates
+  checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
+  installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  onUpdateAvailable: (cb) => {
+    ipcRenderer.removeAllListeners('update:available');
+    ipcRenderer.on('update:available', (_, info) => cb(info));
+  },
+  onUpdateDownloaded: (cb) => {
+    ipcRenderer.removeAllListeners('update:downloaded');
+    ipcRenderer.on('update:downloaded', (_, info) => cb(info));
+  },
+  onUpdateError: (cb) => {
+    ipcRenderer.removeAllListeners('update:error');
+    ipcRenderer.on('update:error', (_, error) => cb(error));
+  },
+
   // Events (renderer listens)
   onGameStart: (cb) => {
     ipcRenderer.removeAllListeners('game:started')
@@ -78,5 +118,8 @@ contextBridge.exposeInMainWorld('gameVault', {
     ipcRenderer.removeAllListeners('achievements:offlineDetected')
     ipcRenderer.on('achievements:offlineDetected', (_, data) => cb(data))
   },
-  confirmOfflineAchievements: (achievements) => ipcRenderer.invoke('achievements:confirmOffline', { achievements }),
+  confirmOfflineAchievements: (achievements) => {
+    if (!Array.isArray(achievements)) return Promise.reject(new Error('achievements must be an array'));
+    return ipcRenderer.invoke('achievements:confirmOffline', { achievements });
+  },
 });

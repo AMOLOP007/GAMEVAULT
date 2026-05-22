@@ -15,7 +15,9 @@ const app = Fastify({
 console.log('[API] Database URL (Configured):', process.env.DATABASE_URL ? 'POSTGRES (REMOTE)' : (process.env.DATABASE_LOCAL_URL ? 'SQLITE (LOCAL)' : 'NOT SET'));
 
 app.register(fastifyCors, { 
-  origin: true, 
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://gamevault-web-lejg.vercel.app', 'https://gamevault-j05d.onrender.com']
+    : true,
   credentials: true 
 });
 

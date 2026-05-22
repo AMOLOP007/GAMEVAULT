@@ -3,13 +3,15 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
-import { User, Mail, Shield, DownloadCloud, Crown } from 'lucide-react';
+import { User, Mail, Shield, DownloadCloud, Crown, Settings, Bell, HardDrive } from 'lucide-react';
 import { api } from '@/lib/api';
 
 export default function ProfilePage() {
   const { user } = useAuth();
 
   if (!user) return null;
+
+  const usernameInitials = user.username?.[0]?.toUpperCase() || 'G';
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -39,12 +41,12 @@ export default function ProfilePage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-panel p-7"
+        className="glass-panel p-7 border-[#8b5cf6]/10"
       >
         {/* Avatar */}
         <div className="flex items-center gap-5 mb-7">
           <div className="w-16 h-16 rounded-2xl gradient-vivid flex items-center justify-center text-2xl font-black text-white shadow-[0_0_30px_rgba(139,92,246,0.3)]">
-            {user.username[0].toUpperCase()}
+            {usernameInitials}
           </div>
           <div>
             <h2 className="text-xl font-black text-white">{user.username}</h2>
@@ -60,11 +62,14 @@ export default function ProfilePage() {
         </div>
       </motion.div>
 
+      {/* ── Preferences ── */}
+      <PreferencesCard />
+
       {/* ── Steam Integration ── */}
       <SteamIntegrationCard />
 
-      {/* ── API Usage ── */}
-      <ApiUsageCard />
+      {/* ── App Info ── */}
+      <AppInfoCard />
 
       {/* ── Danger Zone ── */}
       <motion.div
@@ -85,50 +90,130 @@ export default function ProfilePage() {
   );
 }
 
-function ApiUsageCard() {
-  const [usage, setUsage] = React.useState<any>(null);
-
+function PreferencesCard() {
+  const [overlayEnabled, setOverlayEnabled] = React.useState(true);
+  
   React.useEffect(() => {
-    const fetchUsage = async () => {
-      if ((window as any).gameVault) {
-        const data = await (window as any).gameVault.getApiUsage();
-        setUsage(data);
-      }
-    };
-    fetchUsage();
+    // In a real implementation this would fetch from electron-store via IPC
+    if ((window as any).gameVault?.getStoreValue) {
+      (window as any).gameVault.getStoreValue('overlayEnabled').then((val: boolean) => {
+        if (val !== undefined) setOverlayEnabled(val);
+      });
+    }
   }, []);
 
-  if (!usage) return null;
+  const handleToggleOverlay = async () => {
+    const newValue = !overlayEnabled;
+    setOverlayEnabled(newValue);
+    if ((window as any).gameVault?.setStoreValue) {
+      await (window as any).gameVault.setStoreValue('overlayEnabled', newValue);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      className="glass-panel p-5 border-[#8b5cf6]/10"
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <Settings className="w-4 h-4 text-[#a855f7]" />
+        <h3 className="text-base font-bold text-white">Preferences</h3>
+      </div>
+      
+      <div className="space-y-4">
+        <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#0c0c1d]/60 border border-[#8b5cf6]/06">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-[#8b5cf6]/10">
+              <Bell className="w-4 h-4 text-[#c084fc]" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Trophy Overlay Notifications</p>
+              <p className="text-[10px] text-[#64748b]">Show popups when achievements are unlocked</p>
+            </div>
+          </div>
+          <button 
+            onClick={handleToggleOverlay}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${overlayEnabled ? 'bg-[#8b5cf6]' : 'bg-[#334155]'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${overlayEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function AppInfoCard() {
+  const [updateStatus, setUpdateStatus] = React.useState<string>('');
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).gameVault) {
+      (window as any).gameVault.onUpdateAvailable(() => setUpdateStatus('Update available, downloading...'));
+      (window as any).gameVault.onUpdateDownloaded(() => setUpdateStatus('Update downloaded. Ready to install.'));
+      (window as any).gameVault.onUpdateError((err: string) => setUpdateStatus('Update failed: ' + err));
+    }
+  }, []);
+
+  const handleCheckUpdates = async () => {
+    if (typeof window !== 'undefined' && (window as any).gameVault?.checkForUpdates) {
+      setUpdateStatus('Checking for updates...');
+      const res = await (window as any).gameVault.checkForUpdates();
+      if (!res.success) setUpdateStatus('Check failed: ' + res.error);
+      else if (!res.info) setUpdateStatus('You are up to date.');
+    }
+  };
+
+  const handleInstallUpdate = () => {
+    if (typeof window !== 'undefined' && (window as any).gameVault?.installUpdate) {
+      (window as any).gameVault.installUpdate();
+    }
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 }}
-      className="glass-panel p-5 border-[#10b981]/10"
+      className="glass-panel p-5 border-[#8b5cf6]/10"
     >
-      <div className="flex items-center gap-2 mb-3">
-        <Shield className="w-4 h-4 text-[#10b981]" />
-        <h3 className="text-base font-bold text-white">API Usage</h3>
+      <div className="flex items-center gap-2 mb-4">
+        <HardDrive className="w-4 h-4 text-[#a855f7]" />
+        <h3 className="text-base font-bold text-white">App Information</h3>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-[10px] text-[#475569] font-bold uppercase">RAWG Daily</p>
-          <p className="text-sm font-bold text-white">{usage.rawgDaily} / 600</p>
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="p-3.5 rounded-xl bg-[#0c0c1d]/60 border border-[#8b5cf6]/06">
+          <p className="text-[10px] text-[#475569] font-bold uppercase tracking-wider mb-1">GameVault Version</p>
+          <p className="text-sm font-bold text-white">1.3.0-rc.1</p>
         </div>
-        <div>
-          <p className="text-[10px] text-[#475569] font-bold uppercase">RAWG Monthly</p>
-          <p className="text-sm font-bold text-white">{usage.rawgMonthly} / 18,000</p>
+        <div className="p-3.5 rounded-xl bg-[#0c0c1d]/60 border border-[#8b5cf6]/06">
+          <p className="text-[10px] text-[#475569] font-bold uppercase tracking-wider mb-1">Local Storage</p>
+          <p className="text-sm font-bold text-white">Optimized</p>
         </div>
-        <div>
-          <p className="text-[10px] text-[#475569] font-bold uppercase">Cached Games</p>
-          <p className="text-sm font-bold text-white">{usage.cacheSize}</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-[#475569] font-bold uppercase">API Status</p>
-          <p className={`text-sm font-bold ${usage.isOnline ? 'text-[#10b981]' : 'text-red-400'}`}>
-            {usage.isOnline ? '● Online' : '○ Offline'}
-          </p>
+      </div>
+      <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-[#0c0c1d]/60 border border-[#8b5cf6]/06">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-white">Software Update</p>
+            {updateStatus && <p className="text-[10px] text-[#c084fc]">{updateStatus}</p>}
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleCheckUpdates}
+              className="px-3 py-1.5 rounded-lg border border-[#8b5cf6]/20 text-[#a855f7] text-xs font-bold hover:bg-[#8b5cf6]/10 transition-colors"
+            >
+              Check Updates
+            </button>
+            {updateStatus === 'Update downloaded. Ready to install.' && (
+              <button 
+                onClick={handleInstallUpdate}
+                className="px-3 py-1.5 rounded-lg bg-[#8b5cf6] text-white text-xs font-bold hover:bg-[#7c3aed] transition-colors"
+              >
+                Install Now
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -173,11 +258,11 @@ function SteamIntegrationCard() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.05 }}
-      className="glass-panel p-5 border-[#60a5fa]/10"
+      transition={{ delay: 0.1 }}
+      className="glass-panel p-5 border-[#8b5cf6]/10"
     >
       <div className="flex items-center gap-2 mb-3">
-        <DownloadCloud className="w-4 h-4 text-[#60a5fa]" />
+        <DownloadCloud className="w-4 h-4 text-[#a855f7]" />
         <h3 className="text-base font-bold text-white">Steam Integration</h3>
       </div>
       <p className="text-xs text-[#475569] mb-4">
@@ -190,7 +275,7 @@ function SteamIntegrationCard() {
             value={steamId}
             onChange={(e) => setSteamId(e.target.value)}
             placeholder="Steam ID (e.g. 7656119...)"
-            className="input-field flex-1 text-sm"
+            className="input-field flex-1 text-sm border-[#8b5cf6]/20 focus:border-[#a855f7]"
           />
           <button
             onClick={handleSync}
@@ -205,10 +290,11 @@ function SteamIntegrationCard() {
           value={steamApiKey}
           onChange={(e) => setSteamApiKey(e.target.value)}
           placeholder="Steam API Key (Optional if set on server)"
-          className="input-field w-full text-sm"
+          className="input-field w-full text-sm border-[#8b5cf6]/20 focus:border-[#a855f7]"
         />
       </div>
-      {message && <p className="text-xs mt-3 text-[#94a3b8]">{message}</p>}
+      {message && <p className="text-xs mt-3 text-[#c084fc]">{message}</p>}
     </motion.div>
   );
 }
+

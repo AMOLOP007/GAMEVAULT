@@ -29,7 +29,7 @@ module.exports = {
     // Prisma client and schema for local SQLite
     'database/schema.prisma',
     'node_modules/prisma-client-desktop/**/*',
-    'node_modules/prisma-client-api/**/*',
+    'node_modules/.prisma/**/*',
     'node_modules/.prisma/**/*',
 
     // Shared packages
@@ -47,7 +47,42 @@ module.exports = {
     '!**/.turbo/**',
     '!**/coverage/**',
     '!**/*.log',
-    '!**/src/**',
+    // SECURITY: Exclude sensitive files from production builds
+    '!**/.env',
+    '!**/.env.*',
+    '!**/tests/**',
+    '!**/*.test.*',
+    '!**/*.spec.*',
+    '!**/.git/**',
+    '!**/.github/**',
+    
+    // Size Optimization: Exclude non-Windows Prisma engines
+    '!**/node_modules/@prisma/engines/*-darwin-*',
+    '!**/node_modules/@prisma/engines/*-linux-*',
+    '!**/node_modules/@prisma/engines/*-debian-*',
+    '!**/node_modules/@prisma/engines/*-alpine-*',
+    '!**/node_modules/@prisma/engines/*-rhel-*',
+    '!**/node_modules/@prisma/engines/*-musl-*',
+    '!**/node_modules/@prisma/engines/libquery_engine.so',
+    '!**/node_modules/@prisma/engines/libquery_engine.dylib',
+    '!**/node_modules/prisma/**',
+
+    // Size Optimization: Exclude unnecessary dev artifacts and heavy web frameworks
+    '!**/node_modules/**/{test,__tests__,tests,examples,example,docs,coverage}',
+    '!**/node_modules/**/*.md',
+    '!**/node_modules/**/*.d.ts',
+    '!**/node_modules/next/**',
+    '!**/node_modules/react/**',
+    '!**/node_modules/react-dom/**',
+    '!**/node_modules/tailwindcss/**',
+    '!**/node_modules/typescript/**',
+    '!**/node_modules/eslint/**',
+    '!**/node_modules/@next/**',
+    '!**/node_modules/@swc/**',
+    '!**/node_modules/playwright/**',
+    '!**/node_modules/puppeteer/**',
+    '!**/apps/web/**',
+    '!**/apps/api/**',
   ],
 
   // Compress the app archive
@@ -115,5 +150,16 @@ module.exports = {
 
     removePattern(appDir, '.map');
     removePattern(appDir, '.ts');
+
+    // Remove unnecessary locales (keep only en-US)
+    const localesDir = path.join(appDir, 'locales');
+    if (fs.existsSync(localesDir)) {
+      const locales = fs.readdirSync(localesDir);
+      for (const locale of locales) {
+        if (locale !== 'en-US.pak') {
+          fs.unlinkSync(path.join(localesDir, locale));
+        }
+      }
+    }
   },
 };

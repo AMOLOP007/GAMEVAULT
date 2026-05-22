@@ -1,6 +1,6 @@
 {
   "name": "@gamevault/desktop",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "type": "module",
   "main": "dist/main/index.js",
@@ -8,13 +8,14 @@
     "dev": "tsc && node scripts/copy-assets.js && electron .",
     "build": "tsc && node scripts/copy-assets.js",
     "start": "electron dist/main/index.js",
-    "build:electron": "tsc && electron-builder"
+    "build:electron": "tsc && node scripts/copy-assets.js && electron-builder"
   },
   "dependencies": {
     "chokidar": "^4.0.3",
     "date-fns": "^4.1.0",
     "electron-log": "^5.4.3",
     "electron-store": "^10.0.0",
+    "electron-updater": "^6.8.3",
     "fast-glob": "^3.3.3",
     "ps-list": "^8.1.0",
     "vdf-parser": "^1.2.1"

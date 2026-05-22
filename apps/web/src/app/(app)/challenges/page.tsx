@@ -2,7 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Target, Award, Zap, Star, Shield, Flame, Clock, Gamepad2, ChevronRight, CheckCircle2, Lock, Sparkles, TrendingUp } from 'lucide-react';
+import { 
+  Trophy, Target, Award, Zap, Star, Shield, Flame, Clock, Gamepad2, 
+  ChevronRight, CheckCircle2, Lock, Sparkles, TrendingUp,
+  Library, MessageSquare, Moon, Users, Edit3, RotateCcw, Bug, Map, Swords, Cloud, Crown
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import { GamingLoader } from '@/components/ui/GamingLoader';
 
@@ -262,6 +266,31 @@ function BadgeCard({ badge, index }: { badge: any, index: number }) {
     });
   };
 
+  const IconMap: Record<string, any> = {
+    'sparkles': Sparkles,
+    'library': Library,
+    'trophy': Trophy,
+    'message-square': MessageSquare,
+    'clock': Clock,
+    'moon': Moon,
+    'star': Star,
+    'shield': Shield,
+    'users': Users,
+    'zap': Zap,
+    'edit-3': Edit3,
+    'rotate-ccw': RotateCcw,
+    'bug': Bug,
+    'award': Award,
+    'map': Map,
+    'flame': Flame,
+    'calendar': Clock, 
+    'swords': Swords,
+    'cloud': Cloud,
+    'crown': Crown
+  };
+
+  const BadgeIcon = IconMap[badge.icon] || Award;
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -282,7 +311,7 @@ function BadgeCard({ badge, index }: { badge: any, index: number }) {
             boxShadow: isUnlocked ? `0 0 20px ${color}10` : 'none'
           }}
         >
-          {badge.icon}
+          <BadgeIcon className={`w-10 h-10 ${isUnlocked ? '' : 'text-white/10'}`} style={{ color: isUnlocked ? color : undefined }} />
           
           {!isUnlocked && (
             <div className="absolute inset-0 flex items-center justify-center">

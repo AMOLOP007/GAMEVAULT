@@ -15,18 +15,31 @@ export async function checkAndAwardBadges(userId: string) {
     where: { code: 'WELCOME' }
   });
 
+  console.log(`[BadgeService] Checking badges for user: ${userId}`);
   if (welcomeBadge) {
     const alreadyHas = user.badges.some((ub: any) => ub.badgeId === welcomeBadge.id);
+    console.log(`[BadgeService] Welcome badge found: ${welcomeBadge.id}, alreadyHas: ${alreadyHas}`);
     if (!alreadyHas) {
-      const unlock = await prisma.userBadge.create({
-        data: {
-          userId,
-          badgeId: welcomeBadge.id,
-        },
-        include: { badge: true }
-      });
-      awardedBadges.push(unlock.badge);
+      try {
+        const unlock = await prisma.userBadge.create({
+          data: {
+            userId,
+            badgeId: welcomeBadge.id,
+          },
+          include: { badge: true }
+        });
+        console.log(`[BadgeService] Awarded WELCOME badge to ${userId}`);
+        awardedBadges.push(unlock.badge);
+      } catch (err: any) {
+        if (err.code !== 'P2002') {
+          console.error(`[BadgeService] Failed to award WELCOME badge: ${err.message}`);
+        } else {
+          console.log(`[BadgeService] Welcome badge already exists (race condition)`);
+        }
+      }
     }
+  } else {
+    console.warn(`[BadgeService] WELCOME badge NOT FOUND in database!`);
   }
 
   // Add more badge checks here...

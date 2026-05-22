@@ -6,6 +6,7 @@ import prisma from '../db.js';
 import { resolveAchievementPath } from './PathResolver.js';
 import { AchievementWatcher } from './AchievementWatcher.js';
 import { readAchievements, diffAchievements, AchievementState } from './AchievementReader.js';
+import { resolveAllAchievementPaths, ResolvedPath } from './PathResolver.js';
 
 export interface AchievementDefinition {
   key: string;
@@ -32,7 +33,7 @@ interface WatchedGame {
   exePath: string;
   definitions: Map<string, AchievementDefinition>;
   lastState: AchievementState[];
-  watcher: AchievementWatcher | null;
+  watchers: { watcher: AchievementWatcher; path: ResolvedPath }[];
 }
 
 export class CrackedAchievementEngine extends EventEmitter {
@@ -50,92 +51,124 @@ export class CrackedAchievementEngine extends EventEmitter {
 
     const installDir = path.dirname(exePath);
 
-    // 1. Resolve path
-    const resolved = await resolveAchievementPath(steamAppId, installDir);
-    if (!resolved) {
-      log.info(`[CrackedAch] No achievement path resolved for ${title}`);
+    // 1. Resolve all paths
+    const resolvedPaths = await resolveAllAchievementPaths(steamAppId, installDir);
+    if (resolvedPaths.length === 0) {
+      log.info(`[CrackedAch] No achievement paths resolved for ${title}`);
       return false;
     }
 
-    if (resolved.fileMissing) {
-      log.info(`[CrackedAch] Achievement file missing for ${title}. Attempting auto-setup.`);
-      const success = await this.setupMissingAchievements(steamAppId, resolved.filePath);
-      if (!success) {
-        log.warn(`[CrackedAch] Failed to auto-setup achievements for ${title}`);
-        return false;
-      }
-    }
+    log.info(`[CrackedAch] Resolved ${resolvedPaths.length} paths for ${title}`);
 
-    log.info(`[CrackedAch] Resolved path: ${resolved.filePath} (${resolved.format})`);
+    // Try to auto-setup missing files for the best path
+    const bestPath = resolvedPaths[0];
+    if (bestPath.fileMissing || await this.isTemplateOnly(bestPath.filePath)) {
+      log.info(`[CrackedAch] Best path is missing or template only. Attempting auto-setup/config.`);
+      if (bestPath.emulator === 'goldberg') {
+        try {
+          const steamSettingsDir = path.dirname(bestPath.filePath);
+          const localSavePath = path.join(steamSettingsDir, 'local_save.txt');
+          if (!fs.existsSync(localSavePath)) {
+            fs.writeFileSync(localSavePath, 'Saves');
+          }
+        } catch (e: any) {}
+      }
+      await this.setupMissingAchievements(steamAppId, bestPath.filePath);
+    }
 
     // 2. Load definitions
     const definitions = await this.loadDefinitions(gameId);
 
-    // 3. Read baseline
-    const baseline = await readAchievements(resolved.filePath, resolved.format);
-
-    const watcher = new AchievementWatcher();
+    // 3. Read baseline (from the first path that actually has data, or just the best path)
+    let baseline: AchievementState[] = [];
+    for (const rp of resolvedPaths) {
+       const state = await readAchievements(rp.filePath, rp.format);
+       if (state.length > 0) {
+         baseline = state;
+         break;
+       }
+    }
 
     const game: WatchedGame = {
       gameId, title, steamAppId, exePath,
       definitions,
       lastState: baseline,
-      watcher
+      watchers: []
     };
 
     this.watching.set(gameId, game);
 
-    // 4. Start watching
-    watcher.start(resolved.filePath, async () => {
-      log.info(`[CrackedAch] File change detected for ${title}`);
-      const currentState = await readAchievements(resolved.filePath, resolved.format);
-      const newlyUnlocked = diffAchievements(game.lastState, currentState);
+    // 4. Start watching all resolved paths
+    for (const rp of resolvedPaths) {
+      const watcher = new AchievementWatcher();
+      game.watchers.push({ watcher, path: rp });
 
-      if (newlyUnlocked.length > 0) {
-        log.info(`[CrackedAch] Found ${newlyUnlocked.length} new unlocks for ${title}`);
-        game.lastState = currentState;
+      watcher.start(rp.filePath, async () => {
+        log.info(`[CrackedAch] File change detected for ${title} at ${rp.filePath}`);
+        const currentState = await readAchievements(rp.filePath, rp.format);
+        const newlyUnlocked = diffAchievements(game.lastState, currentState);
 
-        for (const ach of newlyUnlocked) {
-          let def = definitions.get(ach.id);
-          if (!def) {
-            // Fallback: match by key ignoring prefix (e.g. steam_ACHIEVEMENT -> ACHIEVEMENT)
-            for (const [k, v] of definitions.entries()) {
-              if (k.endsWith(`_${ach.id}`) || k === ach.id) {
-                def = v;
-                break;
-              }
-            }
+        if (newlyUnlocked.length > 0) {
+          log.info(`[CrackedAch] Found ${newlyUnlocked.length} new unlocks for ${title}`);
+          game.lastState = currentState;
+
+          for (const ach of newlyUnlocked) {
+            this.processUnlock(game, ach, rp.emulator);
           }
-
-          const unlocked: UnlockedAchievement = {
-            key: ach.id,
-            name: def?.name || ach.id,
-            description: def?.description || '',
-            iconUrl: def?.iconUrl,
-            iconGrayUrl: def?.iconGrayUrl,
-            globalPercent: def?.globalPercent,
-            isHidden: def?.isHidden,
-            earnedAt: ach.unlockTime ? new Date(ach.unlockTime * 1000) : new Date(),
-            gameId: game.gameId,
-            gameTitle: game.title,
-            steamAppId: game.steamAppId,
-            source: resolved.emulator,
-          };
-
-          this.emit('achievement:unlocked', unlocked);
         }
+      });
+    }
+
+    // 5. Retroactive Sync
+    const alreadyEarned = baseline.filter(a => a.unlocked);
+    if (alreadyEarned.length > 0) {
+      log.info(`[CrackedAch] Retroactive sync: Found ${alreadyEarned.length} existing unlocks for ${title}`);
+      for (const ach of alreadyEarned) {
+        this.processUnlock(game, ach, bestPath.emulator);
       }
-    });
+    }
 
     return true;
+  }
+
+  private processUnlock(game: WatchedGame, ach: AchievementState, source: string) {
+    let def = game.definitions.get(ach.id);
+    if (!def) {
+      // Fallback: match by key ignoring prefix (e.g. steam_ACHIEVEMENT -> ACHIEVEMENT)
+      for (const [k, v] of game.definitions.entries()) {
+        if (k.endsWith(`_${ach.id}`) || k === ach.id) {
+          def = v;
+          break;
+        }
+      }
+    }
+
+    const unlocked: UnlockedAchievement = {
+      key: ach.id,
+      name: def?.name || ach.id,
+      description: def?.description || '',
+      iconUrl: def?.iconUrl,
+      iconGrayUrl: def?.iconGrayUrl,
+      globalPercent: def?.globalPercent,
+      isHidden: def?.isHidden,
+      earnedAt: ach.unlockTime ? new Date(ach.unlockTime * 1000) : new Date(),
+      gameId: game.gameId,
+      gameTitle: game.title,
+      steamAppId: game.steamAppId,
+      source: source,
+    };
+
+    this.emit('achievement:unlocked', unlocked);
   }
 
   unwatch(gameId: string) {
     const game = this.watching.get(gameId);
     if (!game) return;
 
-    if (game.watcher) {
-      game.watcher.stop();
+    if (game.watchers) {
+      for (const w of game.watchers) {
+        w.watcher.stop();
+      }
     }
 
     this.watching.delete(gameId);
@@ -199,10 +232,13 @@ export class CrackedAchievementEngine extends EventEmitter {
     return defs;
   }
 
-  // Preserve this method for now as it is used in index.ts, but refactor to use new modules
+    // Preserve this method for now as it is used in index.ts, but refactor to use new modules
   async scanForOfflineAchievements(userId: string, targetGameId?: string): Promise<UnlockedAchievement[]> {
     const allDiscovered: UnlockedAchievement[] = [];
     try {
+      // Import session validator to gate achievement crediting
+      const { areAchievementsPlausible } = await import('./SessionValidator.js');
+
       log.info(`[CrackedAch] Starting scan for offline achievements...`);
       const games = await prisma.game.findMany({
         where: { 
@@ -215,21 +251,39 @@ export class CrackedAchievementEngine extends EventEmitter {
         if (!game.steamAppId || !game.exePath) continue;
 
         const installDir = path.dirname(game.exePath);
-        const resolved = await resolveAchievementPath(game.steamAppId, installDir);
-        if (!resolved) continue;
+        const resolvedPaths = await resolveAllAchievementPaths(game.steamAppId, installDir);
+        if (resolvedPaths.length === 0) continue;
 
-        const currentState = await readAchievements(resolved.filePath, resolved.format);
+        let currentState: AchievementState[] = [];
+        let emulator = 'unknown';
+        for (const rp of resolvedPaths) {
+          const state = await readAchievements(rp.filePath, rp.format);
+          if (state.length > currentState.length) {
+            currentState = state;
+            emulator = rp.emulator;
+          }
+        }
         if (currentState.length === 0) continue;
 
         const earnedInDb = await prisma.gameAchievement.findMany({
           where: { userId, gameId: game.id, isEarned: true }
         });
-        const earnedKeys = new Set(earnedInDb.map(a => a.key.replace(`${resolved.emulator}_`, '')));
+        const earnedKeys = new Set(earnedInDb.map(a => a.key.replace(`${emulator}_`, '')));
         
+        // Find missing achievements
+        const newlyUnlocked = currentState.filter(ach => ach.unlocked && !earnedKeys.has(ach.id));
+        if (newlyUnlocked.length === 0) continue;
+
+        // ANTI-CHEAT GATE
+        const isPlausible = areAchievementsPlausible(newlyUnlocked);
+        if (!isPlausible) {
+          log.warn(`[CrackedAch] Blocked ${newlyUnlocked.length} offline achievements for ${game.title} due to anti-cheat heuristics.`);
+          continue;
+        }
+
         const definitions = await this.loadDefinitions(game.id);
 
-        for (const ach of currentState) {
-          if (ach.unlocked && !earnedKeys.has(ach.id)) {
+        for (const ach of newlyUnlocked) {
             const def = definitions.get(ach.id);
             allDiscovered.push({
               key: ach.id,
@@ -243,14 +297,42 @@ export class CrackedAchievementEngine extends EventEmitter {
               gameId: game.id,
               gameTitle: game.title,
               steamAppId: game.steamAppId,
-              source: resolved.emulator,
+              source: emulator,
             });
           }
-        }
       }
     } catch (err: any) {
       log.error(`[CrackedAch] Background scan failed: ${err.message}`);
     }
     return allDiscovered;
+  }
+
+  async postSessionRescan(gameId: string): Promise<UnlockedAchievement[]> {
+    log.info(`[CrackedAch] Running post-session rescan for ${gameId}`);
+    return this.scanForOfflineAchievements('SYSTEM', gameId);
+  }
+
+  async backgroundSweepAll(userId: string): Promise<UnlockedAchievement[]> {
+    log.info(`[CrackedAch] Running periodic background sweep`);
+    return this.scanForOfflineAchievements(userId);
+  }
+
+  private async isTemplateOnly(filePath: string): Promise<boolean> {
+    try {
+      if (!fs.existsSync(filePath)) return true;
+      const content = fs.readFileSync(filePath, 'utf8');
+      if (filePath.endsWith('.json')) {
+        const data = JSON.parse(content);
+        for (const val of Object.values(data)) {
+          if (typeof val === 'object' && val !== null && (val as any).earned === true) {
+            return false;
+          }
+        }
+        return true;
+      }
+    } catch (e) {
+      return true;
+    }
+    return false;
   }
 }

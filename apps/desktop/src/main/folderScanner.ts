@@ -6,6 +6,7 @@ export interface ScannedGame {
   name: string;
   exePath: string;
   lastModified: Date;
+  steamAppId?: number;
 }
 
 // Known crack/emulator signature files — presence of any of these in a folder
@@ -193,11 +194,14 @@ export async function scanFolder(dirPath: string): Promise<ScannedGame[]> {
   if (sigCheck !== 'none') {
     // Trusted path: signature found — just find the best EXE
     const best = findBestExe(dirPath);
+    const appId = findSteamAppId(dirPath);
+
     if (best) {
       results.push({
         name: best.name,
         exePath: best.exePath,
-        lastModified: (() => { try { return fs.statSync(best.exePath).mtime; } catch { return new Date(); } })()
+        lastModified: (() => { try { return fs.statSync(best.exePath).mtime; } catch { return new Date(); } })(),
+        steamAppId: appId
       });
     }
     return results;
@@ -275,7 +279,8 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[],
             existing.exePath = fullPath;
           }
         } else {
-          results.push({ name: gameName, exePath: fullPath, lastModified: stats.mtime });
+          const appId = findSteamAppId(dir);
+          results.push({ name: gameName, exePath: fullPath, lastModified: stats.mtime, steamAppId: appId });
         }
       }
     }
@@ -283,3 +288,53 @@ async function recursiveScan(dir: string, depth: number, results: ScannedGame[],
     // Skip unreadable folders
   }
 }
+
+/**
+ * Deep search for steam_appid.txt in a folder and its subdirectories
+ * (limited depth for performance).
+ */
+function findSteamAppId(dir: string): number | undefined {
+  try {
+    // 1. Check root and common subfolders first (fast)
+    const commonPaths = [
+      'steam_appid.txt',
+      'steam_settings/steam_appid.txt',
+      'b1/Binaries/Win64/steam_appid.txt', // Specific for some games
+      'Engine/Binaries/ThirdParty/Steamworks/Steamv151/Win64/steam_settings/steam_appid.txt' // BMW specific
+    ];
+
+    for (const p of commonPaths) {
+      const fullPath = path.join(dir, p);
+      if (fs.existsSync(fullPath)) {
+        const content = fs.readFileSync(fullPath, 'utf8').trim();
+        const match = content.match(/^(\d+)/); 
+        if (match) return parseInt(match[1], 10);
+      }
+    }
+
+    // 2. Recursive search if not found in common paths (max depth 4)
+    function search(currentDir: string, depth: number): number | undefined {
+      if (depth > 4) return undefined;
+      let entries: fs.Dirent[];
+      try { entries = fs.readdirSync(currentDir, { withFileTypes: true }); }
+      catch { return undefined; }
+
+      for (const e of entries) {
+        if (e.isDirectory()) {
+          const res = search(path.join(currentDir, e.name), depth + 1);
+          if (res) return res;
+        } else if (e.name.toLowerCase() === 'steam_appid.txt') {
+          const content = fs.readFileSync(path.join(currentDir, e.name), 'utf8').trim();
+          const match = content.match(/^(\d+)/);
+          if (match) return parseInt(match[1], 10);
+        }
+      }
+      return undefined;
+    }
+
+    return search(dir, 0);
+  } catch {
+    return undefined;
+  }
+}
+

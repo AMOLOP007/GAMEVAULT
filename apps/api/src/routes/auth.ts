@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
 import { EpicOAuth } from '../lib/epicOAuth.js';
+import { checkAndAwardBadges } from '../services/badgeService.js';
 
 export default async function authRoutes(fastify: FastifyInstance) {
   // GET /api/auth/me
@@ -9,6 +10,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const user = await prisma.user.findUnique({
       where: { id: userId }
     });
+    
+    // Asynchronously check and award badges (like the Welcome badge)
+    // We don't await this so it doesn't block the /me request
+    checkAndAwardBadges(userId).catch(console.error);
+    
     return user;
   });
 

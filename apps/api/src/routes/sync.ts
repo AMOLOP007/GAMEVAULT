@@ -121,17 +121,43 @@ export default async function syncRoutes(fastify: FastifyInstance) {
   // POST /api/sync/forensic - High-accuracy forensic reconstruction
   fastify.post('/forensic', async (request: FastifyRequest) => {
     const userId = (request.user as any).sub;
-    const { appId, lastPlayed, totalPlaytimeMinutes, powerEvents, steamLogs, gameId } = request.body as any;
+    const body = request.body as any;
 
+    // SECURITY: Validate and sanitize inputs
+    const appId = String(body.appId || '');
+    const gameId = String(body.gameId || '');
     if (!appId || !gameId) {
       throw new Error('AppID and GameID are required for forensic sync');
     }
 
+    const lastPlayed = Number(body.lastPlayed) || 0;
+    const totalPlaytimeMinutes = Math.min(Math.max(0, Number(body.totalPlaytimeMinutes) || 0), 525600); // Cap at 1 year
+
+    // SECURITY: Limit array sizes to prevent memory DoS
+    const powerEvents = Array.isArray(body.powerEvents) ? body.powerEvents.slice(0, 500) : [];
+    const steamLogs = Array.isArray(body.steamLogs) ? body.steamLogs.slice(0, 200) : [];
+
+    // Resolve game: Desktop sends local SQLite IDs which differ from Postgres IDs.
+    // Try steamAppId first (most reliable cross-DB identifier), then fall back to gameId.
+    let resolvedGameId = gameId;
+    const steamAppIdNum = parseInt(appId, 10);
+    if (!isNaN(steamAppIdNum)) {
+      const gameByAppId = await prisma.game.findFirst({
+        where: { steamAppId: steamAppIdNum }
+      });
+      if (gameByAppId) resolvedGameId = gameByAppId.id;
+    }
+
     // Calculate missed playtime
     const userGame = await prisma.userGame.findUnique({
-      where: { userId_gameId: { userId, gameId } },
+      where: { userId_gameId: { userId, gameId: resolvedGameId } },
       select: { totalPlaytime: true }
     });
+
+    if (!userGame) {
+      // Game not in user's library yet — skip silently (it will sync on next opportunity)
+      return { success: false, missedSeconds: 0, reason: 'Game not yet in user library' };
+    }
 
     const currentTotalSeconds = userGame?.totalPlaytime || 0;
     const steamTotalSeconds = totalPlaytimeMinutes * 60;
@@ -139,7 +165,7 @@ export default async function syncRoutes(fastify: FastifyInstance) {
 
     if (missedSeconds > 60) {
       const { PredictionEngine } = await import('../services/predictionEngine.js');
-      await PredictionEngine.reconstruct(userId, gameId, {
+      await PredictionEngine.reconstruct(userId, resolvedGameId, {
         lastPlayed,
         totalPlaytimeMinutes,
         powerEvents,
@@ -148,7 +174,7 @@ export default async function syncRoutes(fastify: FastifyInstance) {
 
       // Update the total playtime in UserGame
       await prisma.userGame.update({
-        where: { userId_gameId: { userId, gameId } },
+        where: { userId_gameId: { userId, gameId: resolvedGameId } },
         data: { totalPlaytime: steamTotalSeconds }
       });
     }
@@ -159,27 +185,45 @@ export default async function syncRoutes(fastify: FastifyInstance) {
   // POST /api/sync/sessions - Sync local play sessions
   fastify.post('/sessions', async (request: FastifyRequest) => {
     const userId = (request.user as any).sub;
-    const session = request.body as any;
+    const body = request.body as any;
+
+    // SECURITY: Whitelist fields — never spread raw body into DB
+    const startTime = new Date(body.startTime);
+    if (isNaN(startTime.getTime())) throw new Error('Invalid startTime');
+
+    const VALID_STATUSES = ['NORMAL', 'CRASH', 'FORCE_KILLED', 'VAULT_CLOSED', 'UNKNOWN'];
+    const session = {
+      id: String(body.id || ''),
+      gameId: String(body.gameId || ''),
+      startTime,
+      endTime: body.endTime ? new Date(body.endTime) : null,
+      lastHeartbeat: body.lastHeartbeat ? new Date(body.lastHeartbeat) : null,
+      duration: Math.min(Math.max(0, Number(body.duration) || 0), 86400 * 7), // Cap at 7 days
+      exitStatus: VALID_STATUSES.includes(body.exitStatus) ? body.exitStatus : 'UNKNOWN',
+    };
+
+    if (!session.gameId) throw new Error('gameId is required');
+
+    // Resolve game ID mismatch between desktop SQLite and API Postgres
+    let resolvedGameId = session.gameId;
+    let userGame = await prisma.userGame.findUnique({
+      where: { userId_gameId: { userId, gameId: session.gameId } }
+    });
+
+    if (!userGame) {
+      const game = await prisma.game.findUnique({ where: { id: session.gameId } });
+      if (game) {
+        resolvedGameId = game.id;
+      } else {
+        return { success: false, reason: 'Game not yet synced to server' };
+      }
+    }
 
     try {
       return await prisma.playSession.upsert({
         where: { id: session.id },
-        create: {
-          ...session,
-          userId,
-          startTime: new Date(session.startTime),
-          endTime: session.endTime ? new Date(session.endTime) : null,
-          lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
-          synced: true
-        },
-        update: {
-          ...session,
-          userId,
-          startTime: new Date(session.startTime),
-          endTime: session.endTime ? new Date(session.endTime) : null,
-          lastHeartbeat: session.lastHeartbeat ? new Date(session.lastHeartbeat) : null,
-          synced: true
-        }
+        create: { ...session, gameId: resolvedGameId, userId, synced: true },
+        update: { ...session, gameId: resolvedGameId, userId, synced: true }
       });
     } catch (err: any) {
       if (err.code === 'P2003') {
@@ -192,7 +236,38 @@ export default async function syncRoutes(fastify: FastifyInstance) {
   // POST /api/sync/achievements - Sync local achievements
   fastify.post('/achievements', async (request: FastifyRequest) => {
     const userId = (request.user as any).sub;
-    const achievement = request.body as any;
+    const body = request.body as any;
+
+    // SECURITY: Whitelist and sanitize fields — prevent arbitrary field injection
+    const achievement = {
+      gameId: String(body.gameId || ''),
+      key: String(body.key || '').slice(0, 300),
+      name: String(body.name || '').slice(0, 200),
+      description: String(body.description || '').slice(0, 1000),
+      iconUrl: String(body.iconUrl || '').slice(0, 500),
+      isEarned: Boolean(body.isEarned),
+      earnedAt: body.earnedAt ? new Date(body.earnedAt) : null,
+      source: String(body.source || 'unknown').slice(0, 50),
+    };
+
+    if (!achievement.gameId || !achievement.key) {
+      throw new Error('gameId and key are required');
+    }
+
+    // Verify the game belongs to the user's library
+    // Desktop sends local SQLite IDs — try direct match first, then resolve by game lookup
+    let userGame = await prisma.userGame.findUnique({
+      where: { userId_gameId: { userId, gameId: achievement.gameId } }
+    });
+
+    // If not found by direct ID, try finding the game and its userGame
+    if (!userGame) {
+      const game = await prisma.game.findUnique({ where: { id: achievement.gameId } });
+      if (!game) {
+        // Silently skip — game hasn't synced to API yet
+        return { success: false, reason: 'Game not yet synced to server' };
+      }
+    }
 
     return await prisma.gameAchievement.upsert({
       where: {
@@ -202,16 +277,8 @@ export default async function syncRoutes(fastify: FastifyInstance) {
           key: achievement.key
         }
       },
-      create: {
-        ...achievement,
-        userId,
-        earnedAt: achievement.earnedAt ? new Date(achievement.earnedAt) : null
-      },
-      update: {
-        ...achievement,
-        userId,
-        earnedAt: achievement.earnedAt ? new Date(achievement.earnedAt) : null
-      }
+      create: { ...achievement, userId },
+      update: { ...achievement, userId }
     });
   });
 
