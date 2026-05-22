@@ -15,6 +15,18 @@ type Tab = 'badges' | 'challenges';
 export default function ChallengesPage() {
   const [activeTab, setActiveTab] = useState<Tab>('challenges');
   const [badgeFilter, setBadgeFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+
+  useEffect(() => {
+    const savedTab = sessionStorage.getItem('gv_progression_tab') as Tab;
+    if (savedTab === 'challenges' || savedTab === 'badges') {
+      setActiveTab(savedTab);
+    }
+  }, []);
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    sessionStorage.setItem('gv_progression_tab', tab);
+  };
   const [loading, setLoading] = useState(true);
   const [badges, setBadges] = useState<any[]>([]);
   const [challenges, setChallenges] = useState<any[]>([]);
@@ -52,32 +64,46 @@ export default function ChallengesPage() {
         </div>
         
         <div className="flex gap-4">
-          <div className="px-6 py-3 rounded-2xl bg-[#fbbf24]/5 border border-[#fbbf24]/10 flex items-center gap-4">
+          <button 
+            onClick={() => handleTabChange('challenges')}
+            className={`px-6 py-3 rounded-2xl border flex items-center gap-4 transition-all duration-300 hover:-translate-y-1 ${
+              activeTab === 'challenges' 
+                ? 'bg-[#fbbf24]/10 border-[#fbbf24]/30 shadow-[0_10px_30px_rgba(251,191,36,0.15)] cursor-default' 
+                : 'bg-white/5 border-white/5 cursor-pointer hover:bg-white/10 hover:border-white/10 opacity-60 hover:opacity-100'
+            }`}
+          >
             <div className="text-right">
               <p className="text-[10px] font-black text-[#64748b] uppercase tracking-widest">Challenges</p>
               <p className="text-xl font-black text-white leading-none">{completedChallenges}<span className="text-[#64748b] text-sm"> / {challenges.length}</span></p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/10 flex items-center justify-center">
-              <Target className="w-5 h-5 text-[#fbbf24]" />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'challenges' ? 'bg-[#fbbf24]/20' : 'bg-white/10'}`}>
+              <Target className={`w-5 h-5 ${activeTab === 'challenges' ? 'text-[#fbbf24]' : 'text-white/40'}`} />
             </div>
-          </div>
+          </button>
           
-          <div className="px-6 py-3 rounded-2xl bg-[#3b82f6]/5 border border-[#3b82f6]/10 flex items-center gap-4">
+          <button 
+            onClick={() => handleTabChange('badges')}
+            className={`px-6 py-3 rounded-2xl border flex items-center gap-4 transition-all duration-300 hover:-translate-y-1 ${
+              activeTab === 'badges' 
+                ? 'bg-[#3b82f6]/10 border-[#3b82f6]/30 shadow-[0_10px_30px_rgba(59,130,246,0.15)] cursor-default' 
+                : 'bg-white/5 border-white/5 cursor-pointer hover:bg-white/10 hover:border-white/10 opacity-60 hover:opacity-100'
+            }`}
+          >
             <div className="text-right">
               <p className="text-[10px] font-black text-[#64748b] uppercase tracking-widest">Badges</p>
               <p className="text-xl font-black text-white leading-none">{unlockedBadges}<span className="text-[#64748b] text-sm"> / {badges.length}</span></p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-[#3b82f6]/10 flex items-center justify-center">
-              <Award className="w-5 h-5 text-[#3b82f6]" />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'badges' ? 'bg-[#3b82f6]/20' : 'bg-white/10'}`}>
+              <Award className={`w-5 h-5 ${activeTab === 'badges' ? 'text-[#3b82f6]' : 'text-white/40'}`} />
             </div>
-          </div>
+          </button>
         </div>
       </div>
 
       {/* ── Tab Switcher ── */}
       <div className="flex gap-2 mb-8 p-1.5 bg-white/5 rounded-2xl w-fit border border-white/5">
         <button
-          onClick={() => setActiveTab('challenges')}
+          onClick={() => handleTabChange('challenges')}
           className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${
             activeTab === 'challenges' ? 'bg-[#fbbf24] text-[#0c0c1d] shadow-[0_0_20px_rgba(251,191,36,0.2)]' : 'text-white/40 hover:text-white hover:bg-white/5'
           }`}
@@ -86,7 +112,7 @@ export default function ChallengesPage() {
           Challenges
         </button>
         <button
-          onClick={() => setActiveTab('badges')}
+          onClick={() => handleTabChange('badges')}
           className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${
             activeTab === 'badges' ? 'bg-[#3b82f6] text-[#0c0c1d] shadow-[0_0_20px_rgba(59,130,246,0.2)]' : 'text-white/40 hover:text-white hover:bg-white/5'
           }`}
@@ -97,13 +123,12 @@ export default function ChallengesPage() {
       </div>
 
       {/* ── Content ── */}
-      <AnimatePresence mode="wait">
+      <div className="mt-8">
         {activeTab === 'challenges' ? (
           <motion.div
             key="challenges"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
             {/* Daily Section */}
@@ -144,7 +169,6 @@ export default function ChallengesPage() {
             key="badges"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
           >
             {/* Badges Filter Toggles */}
             <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl w-fit border border-white/5">
@@ -185,7 +209,7 @@ export default function ChallengesPage() {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -293,9 +317,11 @@ function BadgeCard({ badge, index }: { badge: any, index: number }) {
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: index * 0.03 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ delay: index * 0.03, layout: { duration: 0.3 } }}
       className="flex flex-col items-center group relative"
     >
       <div className="relative mb-3">

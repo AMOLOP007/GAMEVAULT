@@ -57,6 +57,12 @@ export default function TrophiesPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (gameStats.length > 0 && !selectedGameId) {
+      handleSelectGame(gameStats[0].gameId);
+    }
+  }, [gameStats, selectedGameId]);
+
   const handleSelectGame = async (gameId: string) => {
     setSelectedGameId(gameId);
     setLoadingAchievements(true);
@@ -69,6 +75,7 @@ export default function TrophiesPage() {
           title: selectedGame?.title,
           steamAppId: selectedGame?.steamAppId
         });
+        
         if (localAchs && localAchs.length > 0) {
           const mappedAchs = localAchs.map((a: any) => ({
             ...a,
@@ -94,15 +101,21 @@ export default function TrophiesPage() {
         }
       }
 
-      const data = await api.get<any>(`/api/achievements/${gameId}`);
-      // Unify the list for display
-      const unified = [
-        ...data.official.map((a: any) => ({ ...a, isOfficial: true })),
-        ...data.internal.map((a: any) => ({ ...a, isOfficial: false }))
-      ];
-      setAchievements(unified);
+      try {
+        const data = await api.get<any>(`/api/achievements/${gameId}`);
+        // Unify the list for display
+        const unified = [
+          ...(data.official || []).map((a: any) => ({ ...a, isOfficial: true })),
+          ...(data.internal || []).map((a: any) => ({ ...a, isOfficial: false }))
+        ];
+        setAchievements(unified);
+      } catch (err) {
+        console.error('Failed to fetch achievements from API, using empty list:', err);
+        setAchievements([]);
+      }
     } catch (err) {
       console.error('Failed to fetch achievements:', err);
+      setAchievements([]);
     } finally {
       setLoadingAchievements(false);
     }
