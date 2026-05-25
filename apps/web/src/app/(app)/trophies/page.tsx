@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, ChevronRight, Search, Sparkles, Filter, Clock, X } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -228,11 +228,11 @@ export default function TrophiesPage() {
     setPoppingTrophy(false);
   };
 
-  const filteredGames = gameStats.filter(g => 
+  const filteredGames = useMemo(() => gameStats.filter(g => 
     g.title.toLowerCase().includes(search.toLowerCase())
-  );
+  ), [gameStats, search]);
 
-  const filteredAchievements = achievements
+  const filteredAchievements = useMemo(() => achievements
     .filter(ach => {
       const matchesFilter = trophyFilter === 'all' || 
                            (trophyFilter === 'steam' && ach.isOfficial) || 
@@ -243,7 +243,7 @@ export default function TrophiesPage() {
     .sort((a, b) => {
       if (a.isEarned === b.isEarned) return 0;
       return a.isEarned ? -1 : 1;
-    });
+    }), [achievements, trophyFilter, trophySearch]);
 
   return (
     <div className="flex h-[calc(100vh-140px)] gap-6 animate-fade-in">

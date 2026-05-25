@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trophy, Target, Award, Zap, Star, Shield, Flame, Clock, Gamepad2, 
@@ -51,8 +51,18 @@ export default function ChallengesPage() {
 
   if (loading) return <GamingLoader message="Loading your accomplishments..." />;
 
-  const completedChallenges = challenges.filter(c => c.status === 'COMPLETED').length;
-  const unlockedBadges = badges.filter(b => b.isUnlocked).length;
+  const completedChallenges = useMemo(() => challenges.filter(c => c.status === 'COMPLETED').length, [challenges]);
+  const unlockedBadges = useMemo(() => badges.filter(b => b.isUnlocked).length, [badges]);
+
+  const dailyChallenges = useMemo(() => challenges.filter(c => c.category === 'DAILY'), [challenges]);
+  const weeklyChallenges = useMemo(() => challenges.filter(c => c.category === 'WEEKLY'), [challenges]);
+  const milestoneChallenges = useMemo(() => challenges.filter(c => c.category === 'MILESTONE'), [challenges]);
+
+  const filteredBadges = useMemo(() => badges.filter(b => {
+    if (badgeFilter === 'unlocked') return b.isUnlocked;
+    if (badgeFilter === 'locked') return !b.isUnlocked;
+    return true;
+  }), [badges, badgeFilter]);
 
   return (
     <div className="min-h-full pb-10 animate-fade-in">
@@ -138,7 +148,7 @@ export default function ChallengesPage() {
                 <h3 className="text-lg font-black text-white tracking-tight uppercase">Daily Objectives</h3>
               </div>
             </div>
-            {challenges.filter(c => c.category === 'DAILY').map((challenge, i) => (
+            {dailyChallenges.map((challenge, i) => (
               <ChallengeCard key={challenge.id} challenge={challenge} index={i} />
             ))}
 
@@ -149,7 +159,7 @@ export default function ChallengesPage() {
                 <h3 className="text-lg font-black text-white tracking-tight uppercase">Weekly Missions</h3>
               </div>
             </div>
-            {challenges.filter(c => c.category === 'WEEKLY').map((challenge, i) => (
+            {weeklyChallenges.map((challenge, i) => (
               <ChallengeCard key={challenge.id} challenge={challenge} index={i} color="#8b5cf6" />
             ))}
 
@@ -160,7 +170,7 @@ export default function ChallengesPage() {
                 <h3 className="text-lg font-black text-white tracking-tight uppercase">Lifetime Milestones</h3>
               </div>
             </div>
-            {challenges.filter(c => c.category === 'MILESTONE').map((challenge, i) => (
+            {milestoneChallenges.map((challenge, i) => (
               <ChallengeCard key={challenge.id} challenge={challenge} index={i} color="#ec4899" />
             ))}
           </motion.div>
@@ -199,11 +209,7 @@ export default function ChallengesPage() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-              {badges.filter(b => {
-                if (badgeFilter === 'unlocked') return b.isUnlocked;
-                if (badgeFilter === 'locked') return !b.isUnlocked;
-                return true;
-              }).map((badge, i) => (
+              {filteredBadges.map((badge, i) => (
                 <BadgeCard key={badge.id} badge={badge} index={i} />
               ))}
             </div>
