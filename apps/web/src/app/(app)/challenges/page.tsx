@@ -134,13 +134,10 @@ export default function ChallengesPage() {
 
       {/* ── Content ── */}
       <div className="mt-8">
-        {activeTab === 'challenges' ? (
-          <motion.div
-            key="challenges"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
+        <div
+          className={activeTab === 'challenges' ? 'block animate-fade-in' : 'hidden'}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Daily Section */}
             <div className="col-span-full">
               <div className="flex items-center gap-3 mb-4">
@@ -173,54 +170,52 @@ export default function ChallengesPage() {
             {milestoneChallenges.map((challenge, i) => (
               <ChallengeCard key={challenge.id} challenge={challenge} index={i} color="#ec4899" />
             ))}
-          </motion.div>
-        ) : (
-          <motion.div
-            key="badges"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {/* Badges Filter Toggles */}
-            <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl w-fit border border-white/5">
-              <button
-                onClick={() => setBadgeFilter('all')}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  badgeFilter === 'all' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
-                }`}
-              >
-                ALL
-              </button>
-              <button
-                onClick={() => setBadgeFilter('unlocked')}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  badgeFilter === 'unlocked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
-                }`}
-              >
-                UNLOCKED
-              </button>
-              <button
-                onClick={() => setBadgeFilter('locked')}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  badgeFilter === 'locked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
-                }`}
-              >
-                LOCKED
-              </button>
-            </div>
+          </div>
+        </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-              {filteredBadges.map((badge, i) => (
-                <BadgeCard key={badge.id} badge={badge} index={i} />
-              ))}
-            </div>
-          </motion.div>
-        )}
+        <div
+          className={activeTab === 'badges' ? 'block animate-fade-in' : 'hidden'}
+        >
+          {/* Badges Filter Toggles */}
+          <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl w-fit border border-white/5">
+            <button
+              onClick={() => setBadgeFilter('all')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                badgeFilter === 'all' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+              }`}
+            >
+              ALL
+            </button>
+            <button
+              onClick={() => setBadgeFilter('unlocked')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                badgeFilter === 'unlocked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+              }`}
+            >
+              UNLOCKED
+            </button>
+            <button
+              onClick={() => setBadgeFilter('locked')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                badgeFilter === 'locked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+              }`}
+            >
+              LOCKED
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            {filteredBadges.map((badge, i) => (
+              <BadgeCard key={badge.id} badge={badge} index={i} />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function ChallengeCard({ challenge, index, color = '#fbbf24' }: { challenge: any, index: number, color?: string }) {
+const ChallengeCard = React.memo(function ChallengeCard({ challenge, index, color = '#fbbf24' }: { challenge: any, index: number, color?: string }) {
   const percentage = Math.min(Math.round((challenge.currentProgress / challenge.targetValue) * 100), 100);
   const isCompleted = challenge.status === 'COMPLETED';
 
@@ -269,9 +264,9 @@ function ChallengeCard({ challenge, index, color = '#fbbf24' }: { challenge: any
       </div>
     </motion.div>
   );
-}
+});
 
-function BadgeCard({ badge, index }: { badge: any, index: number }) {
+const BadgeCard = React.memo(function BadgeCard({ badge, index }: { badge: any, index: number }) {
   const isUnlocked = badge.isUnlocked;
   
   const rarityColors: Record<string, string> = {
@@ -401,4 +396,4 @@ function BadgeCard({ badge, index }: { badge: any, index: number }) {
       </div>
     </motion.div>
   );
-}
+});

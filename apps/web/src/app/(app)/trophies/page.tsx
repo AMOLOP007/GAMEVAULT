@@ -470,70 +470,13 @@ export default function TrophiesPage() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredAchievements.map((ach, idx) => (
-                      <motion.div
-                        key={ach.key}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: idx * 0.02 }}
-                        onContextMenu={(e) => {
-                          if (!ach.isEarned) {
-                            e.preventDefault();
-                            handleMarkAsDone(ach);
-                          }
-                        }}
-                        className={`group relative p-4 rounded-2xl border transition-all ${
-                          ach.isEarned 
-                            ? 'bg-gradient-to-br from-[#fbbf24]/10 to-transparent border-[#fbbf24]/20' 
-                            : 'bg-white/[0.02] border-white/5 opacity-60 grayscale'
-                        }`}
-                      >
-                        <div className="flex gap-4">
-                          <div className={`w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 shadow-lg ${ach.isEarned ? 'border border-[#fbbf24]/30' : 'border border-white/10'}`}>
-                            {ach.iconUrl ? (
-                              <img src={ach.iconUrl} alt="icon" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-white/5">
-                                <Trophy className="w-5 h-5 text-white/20" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between">
-                              <h4 className="text-[11px] font-black text-white leading-tight uppercase tracking-tight">{ach.name || ach.title}</h4>
-                              {ach.source && (
-                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter border ${
-                                  ach.source === 'steam' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                  ach.source === 'internal' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                                  'bg-[#fbbf24]/10 text-[#fbbf24] border-[#fbbf24]/20'
-                                }`}>
-                                  {ach.source}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] font-bold text-[#64748b] mt-1 line-clamp-2 leading-relaxed italic">{ach.description}</p>
-                          </div>
-                        </div>
-                        {ach.isEarned && (
-                          <div className="absolute top-2 right-2 flex items-center gap-2">
-                             <Sparkles className="w-3 h-3 text-[#fbbf24] animate-pulse" />
-                             <button
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 handlePopIndividual(ach);
-                               }}
-                               className="text-[8px] font-black uppercase text-[#fbbf24] bg-[#fbbf24]/10 px-1.5 py-0.5 rounded border border-[#fbbf24]/20 hover:bg-[#fbbf24]/20 transition-all opacity-0 group-hover:opacity-100"
-                             >
-                               Pop
-                             </button>
-                          </div>
-                        )}
-                        {ach.earnedAt && (
-                           <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
-                              <span className="text-[#64748b]">Unlocked</span>
-                              <span className="text-[#fbbf24]">{new Date(ach.earnedAt).toLocaleDateString()}</span>
-                           </div>
-                        )}
-                      </motion.div>
+                      <TrophyCard 
+                        key={ach.key} 
+                        ach={ach} 
+                        idx={idx} 
+                        onMarkAsDone={handleMarkAsDone} 
+                        onPop={handlePopIndividual} 
+                      />
                     ))}
                     {filteredAchievements.length === 0 && (
                       <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
@@ -787,3 +730,71 @@ function SyncModal({ onClose, initialSteamId, initialEpicId, onSynced, games }: 
     </motion.div>
   );
 }
+
+const TrophyCard = React.memo(function TrophyCard({ ach, idx, onMarkAsDone, onPop }: { ach: any, idx: number, onMarkAsDone: any, onPop: any }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: Math.min(idx * 0.02, 0.5) }}
+      onContextMenu={(e) => {
+        if (!ach.isEarned) {
+          e.preventDefault();
+          onMarkAsDone(ach);
+        }
+      }}
+      className={`group relative p-4 rounded-2xl border transition-all ${
+        ach.isEarned 
+          ? 'bg-gradient-to-br from-[#fbbf24]/10 to-transparent border-[#fbbf24]/20' 
+          : 'bg-white/[0.02] border-white/5 opacity-60 grayscale'
+      }`}
+    >
+      <div className="flex gap-4">
+        <div className={`w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 shadow-lg ${ach.isEarned ? 'border border-[#fbbf24]/30' : 'border border-white/10'}`}>
+          {ach.iconUrl ? (
+            <img src={ach.iconUrl} alt="icon" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-white/5">
+              <Trophy className="w-5 h-5 text-white/20" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-start justify-between">
+            <h4 className="text-[11px] font-black text-white leading-tight uppercase tracking-tight">{ach.name || ach.title}</h4>
+            {ach.source && (
+              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter border ${
+                ach.source === 'steam' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                ach.source === 'internal' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                'bg-[#fbbf24]/10 text-[#fbbf24] border-[#fbbf24]/20'
+              }`}>
+                {ach.source}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] font-bold text-[#64748b] mt-1 line-clamp-2 leading-relaxed italic">{ach.description}</p>
+        </div>
+      </div>
+      {ach.isEarned && (
+        <div className="absolute top-2 right-2 flex items-center gap-2">
+           <Sparkles className="w-3 h-3 text-[#fbbf24] animate-pulse" />
+           <button
+             onClick={(e) => {
+               e.stopPropagation();
+               onPop(ach);
+             }}
+             className="text-[8px] font-black uppercase text-[#fbbf24] bg-[#fbbf24]/10 px-1.5 py-0.5 rounded border border-[#fbbf24]/20 hover:bg-[#fbbf24]/20 transition-all opacity-0 group-hover:opacity-100"
+           >
+             Pop
+           </button>
+        </div>
+      )}
+      {ach.earnedAt && (
+         <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-[8px] font-black uppercase tracking-widest">
+            <span className="text-[#64748b]">Unlocked</span>
+            <span className="text-[#fbbf24]">{new Date(ach.earnedAt).toLocaleDateString()}</span>
+         </div>
+      )}
+    </motion.div>
+  );
+}, (prev, next) => prev.ach.key === next.ach.key && prev.ach.isEarned === next.ach.isEarned);

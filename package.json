@@ -1,6 +1,6 @@
 {
   "name": "gamevault",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "private": true,
   "description": "GameVault – Universal Game Tracker & Library Manager",
   "main": "apps/desktop/dist/main/index.js",
