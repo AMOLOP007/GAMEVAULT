@@ -760,50 +760,56 @@ ipcMain.handle('achievements:get', async (_, gameId: string, payload?: any) => {
         log.info(`[Main] Fetching Steam achievements for AppID: ${steamAppId}`);
         const parsedAchievements: any[] = [];
         
-        // ── Fetch Steam XML achievements (provides API names like ACH_01 needed for local sync) ──
+        // ── Fetch Global Achievements (No API Key required) ──
+        // Steam deprecated ?xml=1 for global stats and age-gates certain games. 
+        // We bypass this by zipping the public Global Percentages API (gives API Names)
+        // with the Steam Community HTML page (gives Display Names & Icons), as both 
+        // naturally sort identically by global unlock percentage descending!
         try {
-          const url = `https://steamcommunity.com/stats/${steamAppId}/achievements/?xml=1`;
-          const response = await axios.get(url, {
-            timeout: 10000,
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-          });
+          const [apiRes, htmlRes] = await Promise.all([
+            axios.get(`http://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${steamAppId}`, { timeout: 10000 }),
+            axios.get(`https://steamcommunity.com/stats/${steamAppId}/achievements/`, {
+              timeout: 10000,
+              headers: { 
+                'User-Agent': 'Mozilla/5.0',
+                'Cookie': 'birthtime=283993201; lastagecheckage=1-0-1990; mature_content=1'
+              }
+            })
+          ]);
           
-          const xml = response.data as string;
+          const apiAchs = apiRes.data?.achievementpercentages?.achievements || [];
+          const html = htmlRes.data as string;
+          const rows = html.split('class="achieveRow');
+          rows.shift(); // Remove header
           
-          // Basic XML parsing with regex (fast and no extra dependency)
-          const achBlocks = xml.split('<achievement>');
-          achBlocks.shift(); // Remove header
+          log.info(`[Main] Scrape found ${apiAchs.length} API names and ${rows.length} HTML blocks`);
           
-          log.info(`[Main] XML scrape found ${achBlocks.length} achievement blocks`);
-          
-          for (const block of achBlocks) {
-            const apiName = block.match(/<apiname><!\[CDATA\[(.*?)\]\]><\/apiname>/)?.[1] || 
-                            block.match(/<apiname>(.*?)<\/apiname>/)?.[1];
-            const displayName = block.match(/<name><!\[CDATA\[(.*?)\]\]><\/name>/)?.[1] || 
-                                block.match(/<name>(.*?)<\/name>/)?.[1];
-            const desc = block.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/)?.[1] || 
-                         block.match(/<description>(.*?)<\/description>/)?.[1];
-            const icon = block.match(/<iconClosed><!\[CDATA\[(.*?)\]\]><\/iconClosed>/)?.[1] || 
-                         block.match(/<iconClosed>(.*?)<\/iconClosed>/)?.[1];
+          for (let i = 0; i < Math.min(apiAchs.length, rows.length); i++) {
+            const apiName = apiAchs[i].name;
+            const row = rows[i];
             
-            if (apiName && displayName) {
+            const displayNameMatch = row.match(/<h3>(.*?)<\/h3>/);
+            const descMatch = row.match(/<h5>(.*?)<\/h5>/);
+            const iconMatch = row.match(/<img src="(.*?)"/);
+            
+            if (apiName && displayNameMatch) {
               parsedAchievements.push({
                 userId,
                 gameId: localGameId,
-                key: apiName, // USE THE REAL API NAME (e.g. ACH_01 or 81001)
-                name: displayName.trim(),
-                description: desc?.trim() || '',
-                iconUrl: icon || '',
+                key: apiName,
+                name: displayNameMatch[1].trim(),
+                description: descMatch ? descMatch[1].trim() : '',
+                iconUrl: iconMatch ? iconMatch[1].trim() : '',
                 isEarned: false,
                 source: 'steam'
               });
             }
           }
           if (parsedAchievements.length > 0) {
-            log.info(`[Main] Parsed ${parsedAchievements.length} achievements from Steam XML`);
+            log.info(`[Main] Parsed ${parsedAchievements.length} achievements via HTML/API Zip Strategy`);
           }
         } catch (scrapeErr: any) {
-          log.warn(`[Main] Steam XML fetch failed: ${scrapeErr.message}.`);
+          log.warn(`[Main] Steam HTML/API fetch failed: ${scrapeErr.message}.`);
         }
         
         // ── Save to DB ──
