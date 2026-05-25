@@ -49,8 +49,6 @@ export default function ChallengesPage() {
     fetchData();
   }, []);
 
-  if (loading) return <GamingLoader message="Loading your accomplishments..." />;
-
   const completedChallenges = useMemo(() => challenges.filter(c => c.status === 'COMPLETED').length, [challenges]);
   const unlockedBadges = useMemo(() => badges.filter(b => b.isUnlocked).length, [badges]);
 
@@ -63,6 +61,8 @@ export default function ChallengesPage() {
     if (badgeFilter === 'locked') return !b.isUnlocked;
     return true;
   }), [badges, badgeFilter]);
+
+  if (loading) return <GamingLoader message="Loading your accomplishments..." />;
 
   return (
     <div className="min-h-full pb-10 animate-fade-in">
