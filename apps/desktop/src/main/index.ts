@@ -123,11 +123,25 @@ function createMainWindow() {
 
   mainWindow.setMenuBarVisibility(false);
 
-  // SECURITY: Block navigation to unknown URLs
+  // SECURITY: Block navigation to unknown URLs (allow OAuth flows)
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const allowed = [WEB_BASE_URL, 'about:blank'];
-    if (!allowed.some(a => url.startsWith(a))) {
-      log.warn(`[Security] Blocked navigation to: ${url}`);
+    if (url === 'about:blank') return;
+    try {
+      const parsedUrl = new URL(url);
+      const allowedDomains = [
+        new URL(WEB_BASE_URL).hostname,
+        'supabase.co',
+        'accounts.google.com'
+      ];
+      const isAllowed = allowedDomains.some(domain => 
+        parsedUrl.hostname === domain || parsedUrl.hostname.endsWith('.' + domain)
+      );
+      
+      if (!isAllowed) {
+        log.warn(`[Security] Blocked navigation to: ${url}`);
+        event.preventDefault();
+      }
+    } catch {
       event.preventDefault();
     }
   });
