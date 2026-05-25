@@ -25,6 +25,8 @@ const machineKey = createHash('sha256')
 const store = new Store<StoreSchema>({
   // SECURITY: Machine-derived key — cannot be extracted from source code.
   encryptionKey: machineKey,
+  // CRITICAL: Prevent crash if upgrading from old version with old encryption key
+  clearInvalidConfig: true,
   schema: {
     token:           { type: 'string', default: '' },
     userId:          { type: 'string', default: '' },

@@ -271,22 +271,7 @@ async function autoScanAndSync(userId: string) {
     }
     log.info('[AutoScan] Sync complete');
 
-    // ── BACKGROUND STEAM SYNC ──────────────────
-    const currentToken = store.get('token');
-    if (currentToken) {
-      log.info('[AutoScan] Triggering background Steam sync...');
-      axios.post(`${API_BASE_URL}/api/sync/steam-all-public`, {}, {
-        headers: { Authorization: `Bearer ${currentToken}` }
-      }).then(res => {
-        log.info(`[AutoScan] Steam sync background complete: ${res.data.message}`);
-      }).catch(err => {
-        log.error(`[AutoScan] Steam sync failed: ${err.message}`);
-        if (err.response?.status === 401) {
-          store.delete('token');
-          store.delete('userId');
-        }
-      });
-    }
+    // Steam background sync has been removed per user requirements
 
     mainWindow?.webContents.send('library:updated');
 
@@ -438,7 +423,7 @@ function setupTracker() {
   tracker.on('game:started', async (data) => {
     enterGamingMode();
     mainWindow?.webContents.send('game:started', data);
-    activityService.logActivity('STARTED_PLAYING', data.gameId).catch(err => log.error('Failed to log activity:', err));
+    activityService.reportActivity('STARTED_PLAYING', data.gameId).catch((err: any) => log.error('Failed to log activity:', err));
 
     const userId = store.get('userId') as string;
     if (challengeService) {
@@ -530,7 +515,7 @@ function setupTracker() {
     mainWindow?.webContents.send('achievement:unlocked', data);
 
     const userId = store.get('userId') as string;
-    activityService.logActivity('EARNED_ACHIEVEMENT', data.gameId, {
+    activityService.reportActivity('EARNED_ACHIEVEMENT', data.gameId, {
       achievementTitle: data.title,
       iconUrl: data.iconUrl
     });
@@ -1636,14 +1621,14 @@ app.whenReady().then(() => {
 
   // Start the first check after a 10s delay to avoid hitting API during startup
   connectivityTimer = setTimeout(runConnectivityCheck, 10_000);
-});
 
-app.on('window-all-closed', () => {
-  // PERF (P2): Cancel connectivity timer when no windows are open (tray mode)
-  if (connectivityTimer) {
-    clearTimeout(connectivityTimer);
-    connectivityTimer = null;
-    log.info('[Main] Connectivity monitor paused (no windows open)');
-  }
-  // Keep app running in tray
+  app.on('window-all-closed', () => {
+    // PERF (P2): Cancel connectivity timer when no windows are open (tray mode)
+    if (connectivityTimer) {
+      clearTimeout(connectivityTimer);
+      connectivityTimer = null;
+      log.info('[Main] Connectivity monitor paused (no windows open)');
+    }
+    // Keep app running in tray
+  });
 });

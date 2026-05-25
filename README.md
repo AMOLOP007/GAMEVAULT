@@ -33,18 +33,7 @@ A cross-platform system to track all your games, log playtime automatically, man
 
 ## 🔑 API Keys Setup Guide
 
-### 1. Steam API Key (Free – 100,000 calls/day)
-
-1. Go to [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)
-2. Log in with your Steam account
-3. Enter a domain name (use `localhost` for development)
-4. Click **Register**
-5. Copy your API key
-6. Paste into `.env.local` as `STEAM_API_KEY`
-
-> **Rate Limit**: 100,000 API calls per day. More than enough for personal use.
-
-### 2. RAWG API Key (Free – 20,000 requests/month)
+### 1. RAWG API Key (Free – 20,000 requests/month)
 
 1. Go to [rawg.io/apidocs](https://rawg.io/apidocs)
 2. Click **Get API Key**
@@ -54,7 +43,7 @@ A cross-platform system to track all your games, log playtime automatically, man
 
 > **Rate Limit**: 20,000 requests/month on the free tier. The app caches responses to stay well within limits.
 
-### 3. IGDB API (via Twitch – Free, 4 req/sec)
+### 2. IGDB API (via Twitch – Free, 4 req/sec)
 
 1. Go to [dev.twitch.tv/console](https://dev.twitch.tv/console)
 2. Log in or create a Twitch account
@@ -75,7 +64,6 @@ A cross-platform system to track all your games, log playtime automatically, man
 
 | API | Free Tier Limit | Credit Card? | Used For |
 |-----|----------------|--------------|----------|
-| Steam | 100,000/day | No | Game library sync, achievements |
 | RAWG | 20,000/month | No | Game metadata, covers, genres |
 | IGDB | 4/second | No | Game metadata (backup source) |
 
@@ -121,9 +109,6 @@ npm run dev:api
 
 # Terminal 2 – Web Frontend
 npm run dev:web
-
-# Terminal 3 – Desktop Tracker (optional)
-npm run dev:desktop
 ```
 
 ### 6. Open the App
