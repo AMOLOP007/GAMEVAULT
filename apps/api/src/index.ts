@@ -111,12 +111,21 @@ app.register(bugReportRoutes, { prefix: '/api/bug-reports' });
 import { hydrateAllMissingMetadata } from './services/metadataService.js';
 import { initBadges, checkAndAwardBadges } from './services/badgeService.js';
 
-// Global Error Handler — never leak stack traces
+// Global Error Handler — never leak internal details in production
 app.setErrorHandler((error, request, reply) => {
+  const statusCode = error.statusCode || 500;
   console.error(`[Error] ${request.method} ${request.url}:`, error.message);
-  reply.status(error.statusCode || 500).send({
+
+  // SECURITY: In production, hide internal error details behind generic messages
+  // Only expose error messages for client errors (4xx), never for server errors (5xx)
+  const isProduction = process.env.NODE_ENV === 'production';
+  const safeMessage = (isProduction && statusCode >= 500)
+    ? 'An unexpected error occurred'
+    : (error.message || 'An unexpected error occurred');
+
+  reply.status(statusCode).send({
     error: error.name || 'InternalServerError',
-    message: error.message || 'An unexpected error occurred'
+    message: safeMessage
   });
 });
 

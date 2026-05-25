@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify';
 import prisma from '../lib/prisma.js';
 
 export default async function socialRoutes(fastify: FastifyInstance) {
+  // SECURITY: All social routes require authentication
+  fastify.addHook('preHandler', (fastify as any).authenticate);
   /**
    * Helper to resolve Supabase UUID to internal CUID
    */

@@ -20,6 +20,13 @@ import { runFullLibraryDiscovery } from './services/libraryScanner.js';
 import { GameLauncher } from './launcher/GameLauncher.js';
 import { resolveLaunchConfig } from './launcher/LaunchResolver.js';
 
+// PERF (P8): Pre-import heavy modules to avoid latency in hot paths
+import { forensicSyncService } from './services/forensicSyncService.js';
+import { scanOnStartup, formatNotificationStrategy } from './achievements/StartupScanner.js';
+import { hasValidSession } from './achievements/SessionValidator.js';
+import { activityService } from './services/activityService.js';
+import { scanLocalAchievements } from './services/achievementScanner.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -36,6 +43,10 @@ let overlay: TrophyOverlay | null = null;
 let tracker: GameTracker | null = null;
 const launcher = new GameLauncher();
 let syncService: SyncService | null = null;
+
+// PERF (P7): Session-scoped scan cache — prevents redundant full library discovery
+let lastScanTimestamp = 0;
+const SCAN_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -158,7 +169,16 @@ async function autoScanAndSync(userId: string) {
     log.info('[AutoScan] Scan already in progress, skipping duplicate request.');
     return;
   }
+
+  // PERF (P7): Skip if we already scanned recently this session
+  const now = Date.now();
+  if (now - lastScanTimestamp < SCAN_CACHE_TTL_MS) {
+    log.info(`[AutoScan] Skipping — last scan was ${Math.round((now - lastScanTimestamp) / 1000)}s ago (cache TTL: ${SCAN_CACHE_TTL_MS / 1000}s)`);
+    return;
+  }
+
   isAutoScanning = true;
+  lastScanTimestamp = now;
   try {
     log.info('[AutoScan] Starting startup scan...');
 
@@ -227,7 +247,6 @@ async function autoScanAndSync(userId: string) {
 
       // ── TRIGGER FORENSIC SYNC ──
       if (game.steamAppId) {
-        const { forensicSyncService } = await import('./services/forensicSyncService.js');
         forensicSyncService.syncGame(game.steamAppId.toString(), g.id).catch(() => { });
       }
 
@@ -253,11 +272,11 @@ async function autoScanAndSync(userId: string) {
     log.info('[AutoScan] Sync complete');
 
     // ── BACKGROUND STEAM SYNC ──────────────────
-    const token = store.get('token');
-    if (token) {
+    const currentToken = store.get('token');
+    if (currentToken) {
       log.info('[AutoScan] Triggering background Steam sync...');
       axios.post(`${API_BASE_URL}/api/sync/steam-all-public`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${currentToken}` }
       }).then(res => {
         log.info(`[AutoScan] Steam sync background complete: ${res.data.message}`);
       }).catch(err => {
@@ -272,10 +291,8 @@ async function autoScanAndSync(userId: string) {
     mainWindow?.webContents.send('library:updated');
 
     // Trigger background offline achievement scan (Optimization: delayed start)
-    // Trigger background offline achievement scan
     setTimeout(async () => {
       try {
-        const { scanOnStartup, formatNotificationStrategy } = await import('./achievements/StartupScanner.js');
         const games = await (prisma as any).game.findMany({
           where: { steamAppId: { not: null }, exePath: { not: null } }
         });
@@ -287,6 +304,7 @@ async function autoScanAndSync(userId: string) {
           exePath: g.exePath!
         }));
 
+        log.info('[AutoScan] Triggering background startup achievement scan...');
         const report = await scanOnStartup(watchedGames, prisma, userId);
         const strategy = formatNotificationStrategy(report);
 
@@ -333,8 +351,8 @@ async function scanGameAchievementsOnce(gameId: string, userId: string): Promise
 
   try {
     // SESSION GATE: Must have at least one tracked GameVault session
-    const { hasValidSession } = await import('./achievements/SessionValidator.js');
-    const hasSession = await hasValidSession(userId, gameId);
+    if (!gameId) return;
+    const hasSession = await hasValidSession(gameId, userId);
     if (!hasSession) {
       log.info(`[LazyAchScan] No GameVault session for game ${gameId}. Skipping offline scan.`);
       return;
@@ -420,8 +438,7 @@ function setupTracker() {
   tracker.on('game:started', async (data) => {
     enterGamingMode();
     mainWindow?.webContents.send('game:started', data);
-    const { activityService } = await import('./services/activityService.js');
-    await activityService.reportActivity('STARTED_PLAYING', data.gameId);
+    activityService.logActivity('STARTED_PLAYING', data.gameId).catch(err => log.error('Failed to log activity:', err));
 
     const userId = store.get('userId') as string;
     if (challengeService) {
@@ -513,8 +530,7 @@ function setupTracker() {
     mainWindow?.webContents.send('achievement:unlocked', data);
 
     const userId = store.get('userId') as string;
-    const { activityService } = await import('./services/activityService.js');
-    await activityService.reportActivity('EARNED_ACHIEVEMENT', data.gameId, {
+    activityService.logActivity('EARNED_ACHIEVEMENT', data.gameId, {
       achievementTitle: data.title,
       iconUrl: data.iconUrl
     });
@@ -1517,10 +1533,13 @@ ipcMain.handle('sync:steam', async (_, { steamId, apiKey }) => {
   }
 });
 
-ipcMain.handle('sync:localAchievements', async (_, { gameId, exePath }) => {
-  const userId = store.get('userId');
-  const { scanLocalAchievements } = await import('./services/achievementScanner.js');
-  return await scanLocalAchievements(userId, gameId, exePath);
+ipcMain.handle('achievements:scan-local', async (_, gameId: string, exePath: string) => {
+  try {
+    const result = await scanLocalAchievements(store.get('userId') as string, gameId, exePath);
+    return { success: true, result };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('api:getUsage', async () => {
@@ -1585,6 +1604,12 @@ app.whenReady().then(() => {
   let connectivityTimer: NodeJS.Timeout | null = null;
 
   async function runConnectivityCheck() {
+    // PERF (P2): Don't run connectivity checks when window is closed and no game active
+    if (!mainWindow && !tracker?.currentSession) {
+      connectivityTimer = null; // Will restart when window opens
+      return;
+    }
+
     // Don't bother during active gaming — save CPU
     if (isGamingMode) {
       connectivityTimer = setTimeout(runConnectivityCheck, 10 * 60 * 1000); // 10 min backoff
@@ -1614,5 +1639,11 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // PERF (P2): Cancel connectivity timer when no windows are open (tray mode)
+  if (connectivityTimer) {
+    clearTimeout(connectivityTimer);
+    connectivityTimer = null;
+    log.info('[Main] Connectivity monitor paused (no windows open)');
+  }
   // Keep app running in tray
 });

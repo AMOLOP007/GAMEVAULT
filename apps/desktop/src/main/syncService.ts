@@ -5,30 +5,80 @@ import { API_BASE_URL } from './config.js';
 import log from 'electron-log';
 const store = Store;
 
+// PERF: Minimum interval between syncs to prevent hammering during rapid events
+const MIN_SYNC_INTERVAL_MS = 30000; // 30 seconds
+
 export class SyncService {
-  private syncTimer: ReturnType<typeof setInterval> | null = null;
+  private syncTimer: ReturnType<typeof setTimeout> | null = null;
   private isPaused = false;
+  private isSyncing = false;
+  private lastSyncAt = 0;
+  // PERF: Fallback periodic check — catches anything missed by event triggers
+  private fallbackTimer: ReturnType<typeof setInterval> | null = null;
 
   startSyncLoop() {
-    this.syncTimer = setInterval(async () => {
+    // PERF: Event-driven sync with fallback periodic check every 5 minutes
+    // The old approach used setInterval(120s) which ran even with nothing to sync
+    this.fallbackTimer = setInterval(() => {
       if (store.get('syncEnabled') && !this.isPaused) {
-        await this.syncWithSupabase();
+        this.requestSync();
       }
-    }, 120000); // Every 120s
+    }, 5 * 60 * 1000); // 5 minutes fallback (was 2 minutes)
+  }
+
+  // PERF: Event-driven sync — call this when something changes (session end, achievement, etc.)
+  requestSync() {
+    if (this.isPaused || !store.get('syncEnabled')) return;
+
+    // Debounce: if we synced recently, schedule one for later
+    const now = Date.now();
+    const elapsed = now - this.lastSyncAt;
+
+    if (elapsed < MIN_SYNC_INTERVAL_MS) {
+      if (!this.syncTimer) {
+        const delay = MIN_SYNC_INTERVAL_MS - elapsed;
+        this.syncTimer = setTimeout(() => {
+          this.syncTimer = null;
+          this.doSync();
+        }, delay);
+      }
+      return;
+    }
+
+    this.doSync();
+  }
+
+  private async doSync() {
+    if (this.isSyncing || this.isPaused) return;
+    this.isSyncing = true;
+    this.lastSyncAt = Date.now();
+
+    try {
+      await this.syncWithSupabase();
+    } finally {
+      this.isSyncing = false;
+    }
   }
 
   pauseSync() {
     this.isPaused = true;
+    if (this.syncTimer) {
+      clearTimeout(this.syncTimer);
+      this.syncTimer = null;
+    }
     log.info('[Sync] Sync loop paused (gaming mode)');
   }
 
   resumeSync() {
     this.isPaused = false;
     log.info('[Sync] Sync loop resumed');
+    // Trigger an immediate sync on resume in case anything queued up
+    this.requestSync();
   }
 
   stopSyncLoop() {
-    if (this.syncTimer) clearInterval(this.syncTimer);
+    if (this.fallbackTimer) clearInterval(this.fallbackTimer);
+    if (this.syncTimer) clearTimeout(this.syncTimer);
   }
 
   private async syncWithSupabase() {

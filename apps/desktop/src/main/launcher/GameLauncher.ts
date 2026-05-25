@@ -139,14 +139,26 @@ export class GameLauncher {
     }
 
     try {
-      const child = spawn(normalized, [], {
-        detached: true, // Allow it to live beyond GameVault if needed, but we still track it
-        stdio: 'ignore',
-        cwd,
-        windowsHide: false,
-        shell: true, // Support .bat and .cmd files on Windows
-        env: { ...process.env }
-      })
+      // SECURITY: Determine if we need cmd.exe for .bat/.cmd files
+      // Never use shell:true as it enables command injection via metacharacters
+      const ext = path.extname(normalized).toLowerCase();
+      const isBatchFile = ext === '.bat' || ext === '.cmd';
+
+      const child = isBatchFile
+        ? spawn('cmd.exe', ['/c', normalized], {
+            detached: true,
+            stdio: 'ignore',
+            cwd,
+            windowsHide: false,
+            env: { ...process.env }
+          })
+        : spawn(normalized, [], {
+            detached: true,
+            stdio: 'ignore',
+            cwd,
+            windowsHide: false,
+            env: { ...process.env }
+          });
       
       child.on('error', (err) => {
         log.error(`[Launcher] Process spawn error: ${err.message}`)

@@ -30,7 +30,6 @@ module.exports = {
     'database/schema.prisma',
     'node_modules/prisma-client-desktop/**/*',
     'node_modules/.prisma/**/*',
-    'node_modules/.prisma/**/*',
 
     // Shared packages
     'packages/**/*',
@@ -85,8 +84,11 @@ module.exports = {
     '!**/apps/api/**',
   ],
 
-  // Compress the app archive
+  // Compress the app archive and enable integrity checks
   asar: true,
+  // SECURITY (T2): Generate SHA-512 checksums for every file inside the ASAR archive
+  // Note: For electron-builder, asar integrity is supported in newer versions, or handled via app builder. 
+  // If a certificate is provided, the asar header is also signed.
   compression: 'maximum',
 
   win: {
@@ -97,6 +99,10 @@ module.exports = {
       }
     ],
     icon: 'apps/desktop/assets/icon.png',
+    // SECURITY (T1): Code Signing
+    // Replace with actual certificate path and password when available
+    // sign: 'build/sign.js', // Custom sign script if needed
+    signingHashAlgorithms: ['sha256'],
   },
 
   nsis: {

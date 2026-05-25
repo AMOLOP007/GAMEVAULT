@@ -8,12 +8,15 @@ const __dirname = path.dirname(__filename);
 
 // PERF: Maximum trophy queue depth — prevent memory buildup during long sessions
 const MAX_QUEUE_DEPTH = 10;
+// PERF: Auto-destroy the overlay window after this many ms of idle to reclaim ~15-20MB RAM
+const OVERLAY_IDLE_DESTROY_MS = 30000;
 
 export class TrophyOverlay {
   private window: BrowserWindow | null = null;
   private queue: any[] = [];
   private isShowing = false;
   private isProcessing = false;
+  private idleDestroyTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // PERF: Lazy creation — window is NOT created until first trophy is shown
@@ -67,8 +70,30 @@ export class TrophyOverlay {
     await new Promise(resolve => (this.window?.webContents as any).once('did-finish-load', resolve));
   }
 
+  // PERF: Schedule auto-destruction of the overlay window when idle
+  private scheduleIdleDestroy() {
+    this.cancelIdleDestroy();
+    this.idleDestroyTimer = setTimeout(() => {
+      if (this.queue.length === 0 && !this.isShowing && !this.isProcessing) {
+        log.info('[TrophyOverlay] Auto-destroying idle overlay window to reclaim RAM');
+        if (this.window && !this.window.isDestroyed()) {
+          this.window.close();
+          this.window = null;
+        }
+      }
+    }, OVERLAY_IDLE_DESTROY_MS);
+  }
+
+  private cancelIdleDestroy() {
+    if (this.idleDestroyTimer) {
+      clearTimeout(this.idleDestroyTimer);
+      this.idleDestroyTimer = null;
+    }
+  }
+
   public showTrophy(data: any) {
     log.info(`[TrophyOverlay] Queueing trophy: ${data.title}`);
+    this.cancelIdleDestroy(); // Cancel any pending destruction
     // PERF: Cap queue depth to prevent unbounded memory growth
     if (this.queue.length >= MAX_QUEUE_DEPTH) {
       log.warn(`[TrophyOverlay] Queue full (${MAX_QUEUE_DEPTH}), dropping oldest trophy`);
@@ -127,13 +152,19 @@ export class TrophyOverlay {
       await new Promise(resolve => setTimeout(resolve, 800));
     } finally {
       this.isProcessing = false;
-      this.processQueue();
+      if (this.queue.length > 0) {
+        this.processQueue();
+      } else {
+        // PERF: No more trophies — schedule auto-destroy to reclaim RAM
+        this.scheduleIdleDestroy();
+      }
     }
   }
 
   // PERF: Destroy window when not needed to reclaim memory during gaming
   public destroy() {
-    if (this.window) {
+    this.cancelIdleDestroy();
+    if (this.window && !this.window.isDestroyed()) {
       this.window.close();
       this.window = null;
     }

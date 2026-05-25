@@ -18,8 +18,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
     return user;
   });
 
-  // POST /api/auth/login
+  // POST /api/auth/login — DEV ONLY: Auto-login for local development
+  // SECURITY: Disabled in production — this endpoint returns a JWT without any credentials
   fastify.post('/login', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (process.env.NODE_ENV === 'production') {
+      return reply.code(403).send({ error: 'This endpoint is disabled in production' });
+    }
     let user = await prisma.user.findFirst();
     if (!user) {
       user = await prisma.user.create({

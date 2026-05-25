@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase.js';
 import prisma from '../lib/prisma.js';
 
 export default async function adminRoutes(fastify: FastifyInstance) {
+  // SECURITY: All admin routes require authentication
+  fastify.addHook('preHandler', (fastify as any).authenticate);
+
   fastify.get('/usage', async () => {
     // Mock usage data for now, ideally read from a Supabase table
     const { count } = await supabase

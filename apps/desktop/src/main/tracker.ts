@@ -8,8 +8,9 @@ import path from 'path';
 
 const execAsync = promisify(exec);
 
-const IDLE_POLL_MS = 30000;     // 30 seconds when idle to save CPU
-const GAMING_POLL_MS = 30000;   // 30 seconds when active
+const IDLE_POLL_MS = 60000;      // 60 seconds when idle (was 30s — saves CPU)
+const DEEP_IDLE_POLL_MS = 120000; // 120 seconds when deeply idle (no game expected for 5+ min)
+const GAMING_POLL_MS = 30000;    // 30 seconds when active
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds heartbeat
 
 export interface TrackedSession {
@@ -33,6 +34,7 @@ export class GameTracker extends EventEmitter {
   private state: 'IDLE' | 'GAMING' = 'IDLE';
   private transitionUntil = 0;
   private expectedGame: { gameId: string, processName: string | null } | null = null;
+  private lastGameSeenAt = Date.now(); // PERF: tracks when we last saw a game for deep idle
 
   constructor(detector: ProcessDetector, userId: string) {
     super();
@@ -92,8 +94,16 @@ export class GameTracker extends EventEmitter {
     if (!this.running) return;
     this.pollTimer = setTimeout(async () => {
       await this.poll();
-      let nextDelay = this.state === 'GAMING' ? GAMING_POLL_MS : IDLE_POLL_MS;
-      if (Date.now() < this.transitionUntil) nextDelay = 2000;
+      let nextDelay: number;
+      if (this.state === 'GAMING') {
+        nextDelay = GAMING_POLL_MS;
+      } else if (Date.now() < this.transitionUntil) {
+        nextDelay = 2000; // Transition mode: fast polling
+      } else {
+        // PERF: Use deep idle interval if no game seen for 5+ minutes
+        const idleDuration = Date.now() - this.lastGameSeenAt;
+        nextDelay = idleDuration > 5 * 60 * 1000 ? DEEP_IDLE_POLL_MS : IDLE_POLL_MS;
+      }
       this.scheduleNextPoll(nextDelay);
     }, delayMs);
   }
@@ -240,6 +250,7 @@ export class GameTracker extends EventEmitter {
     
     if (pid) await this.syncStartTimeWithOS(pid);
     this.state = 'GAMING';
+    this.lastGameSeenAt = Date.now();
     this.emit('game:started', { gameId, sessionId: session.id });
     this.startHeartbeat();
   }

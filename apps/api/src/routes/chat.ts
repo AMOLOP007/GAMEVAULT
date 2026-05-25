@@ -26,7 +26,7 @@ export default async function chatRoutes(fastify: FastifyInstance) {
   // Post a message
   fastify.post('/messages', async (request, reply) => {
     const { content } = request.body as { content: string };
-    const userId = (request.user as any).id;
+    const userId = (request.user as any).sub;
 
     if (!content || content.trim().length === 0) {
       return reply.status(400).send({ error: 'Message content required' });

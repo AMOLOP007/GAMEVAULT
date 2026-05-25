@@ -17,8 +17,10 @@ const prisma = new PrismaClient({
 });
 
 // PERF: WAL mode enables non-blocking concurrent reads during heartbeat writes
-// Must be the first DB operation before any queries
-prisma.$executeRawUnsafe('PRAGMA journal_mode=WAL;').catch(() => {});
-prisma.$executeRawUnsafe('PRAGMA synchronous=NORMAL;').catch(() => {});
+// These are SQLite-only PRAGMAs — skip on Postgres/MySQL
+if (dbUrl?.startsWith('file:')) {
+  prisma.$executeRawUnsafe('PRAGMA journal_mode=WAL;').catch(() => {});
+  prisma.$executeRawUnsafe('PRAGMA synchronous=NORMAL;').catch(() => {});
+}
 
 export default prisma;

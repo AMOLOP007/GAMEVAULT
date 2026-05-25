@@ -1,4 +1,6 @@
 import Store from 'electron-store';
+import { createHash } from 'crypto';
+import os from 'os';
 
 export interface StoreSchema {
   token: string;
@@ -14,10 +16,15 @@ export interface StoreSchema {
   achievementBaselines: Record<string, string[]>;
 }
 
+// SECURITY: Derive encryption key from machine identity instead of hardcoding it.
+// This means the store file is only decryptable on the same machine.
+const machineKey = createHash('sha256')
+  .update(`gamevault_${os.hostname()}_${os.userInfo().username}_vault`)
+  .digest('hex');
+
 const store = new Store<StoreSchema>({
-  // SECURITY: Obfuscate stored tokens so they can't be read by simply opening the JSON file.
-  // This is not true encryption (key is in code), but it prevents casual credential theft.
-  encryptionKey: 'gv_s3cur3_st0re_k3y_2026',
+  // SECURITY: Machine-derived key — cannot be extracted from source code.
+  encryptionKey: machineKey,
   schema: {
     token:           { type: 'string', default: '' },
     userId:          { type: 'string', default: '' },
