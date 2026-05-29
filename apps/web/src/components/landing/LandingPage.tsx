@@ -1,25 +1,46 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
-import { motion, useScroll, useTransform, AnimatePresence, useSpring } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { 
   ArrowRight, Check, Globe, Download, Zap, Shield, Fingerprint, 
-  RefreshCcw, Command, Cpu, Lock, Activity, Trophy
+  RefreshCcw, Command, Cpu, Lock, Activity, Trophy, Gamepad2, Sparkles, Star
 } from 'lucide-react';
 import { BackgroundVideo } from '@/components/ui/BackgroundVideo';
 
 const DOWNLOAD_URL = "https://github.com/AMOLOP007/GAMEVAULT/releases/download/v1.5.0/GameVault-Setup-1.5.0.exe";
 
-export default function LandingPage() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end end"] });
-  const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30 });
+const FloatingOrb = ({ icon: Icon, delay, top, left, right, bottom, color, size = 64, rotateRange = [0, 10, -5, 0] }: any) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 1, delay, type: "spring", bounce: 0.5 }}
+    className="absolute pointer-events-none z-20 hidden md:block"
+    style={{ top, left, right, bottom }}
+  >
+    <motion.div
+      animate={{ y: [0, -20, 0], rotate: rotateRange }}
+      transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: delay * 2 }}
+      className="liquid-glass rounded-full flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl border border-white/20"
+      style={{ width: size, height: size, background: 'rgba(139, 92, 246, 0.05)' }}
+    >
+      <Icon size={size * 0.4} color={color} className="drop-shadow-[0_0_15px_currentColor]" />
+    </motion.div>
+  </motion.div>
+);
 
-  // Parallax transforms
-  const heroY = useTransform(smoothProgress, [0, 0.2], [0, 150]);
-  const heroOpacity = useTransform(smoothProgress, [0, 0.15], [1, 0]);
-  const featuresY = useTransform(smoothProgress, [0.1, 0.4], [100, 0]);
-  const updatesY = useTransform(smoothProgress, [0.4, 0.7], [100, 0]);
+export default function LandingPage() {
+  const heroRef = useRef<HTMLElement>(null);
+  
+  // Track ONLY the hero section for parallax, instead of the whole page
+  const { scrollYProgress: heroScroll } = useScroll({ 
+    target: heroRef, 
+    offset: ["start start", "end start"] 
+  });
+
+  // Fade out and translate down as user scrolls past the hero
+  const heroY = useTransform(heroScroll, [0, 1], [0, 200]);
+  const heroOpacity = useTransform(heroScroll, [0, 0.8], [1, 0]);
 
   // Email CTA State
   const [showEmailInput, setShowEmailInput] = useState(false);
@@ -53,7 +74,8 @@ export default function LandingPage() {
   }, [showEmailInput, submitted, fullPlaceholder]);
 
   return (
-    <main ref={containerRef} className="relative bg-black h-screen w-screen flex flex-col overflow-y-auto overflow-x-hidden selection:bg-[#8b5cf6]/50 selection:text-white font-sans">
+    // Fixed: Removed h-screen and overflow-y-auto to let the window scroll natively!
+    <main className="relative bg-black min-h-screen flex flex-col overflow-x-hidden selection:bg-[#8b5cf6]/50 selection:text-white font-sans">
       
       {/* ── Navbar ── */}
       <motion.nav 
@@ -62,7 +84,7 @@ export default function LandingPage() {
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         className="fixed top-0 z-50 px-6 py-6 w-full pointer-events-none"
       >
-        <div className="liquid-glass rounded-full px-6 py-3 flex items-center justify-between max-w-5xl mx-auto pointer-events-auto">
+        <div className="liquid-glass rounded-full px-6 py-3 flex items-center justify-between max-w-5xl mx-auto pointer-events-auto shadow-[0_0_30px_rgba(0,0,0,0.5)]">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2">
               <Command className="w-5 h-5 text-[#8b5cf6]" />
@@ -89,9 +111,15 @@ export default function LandingPage() {
       </motion.nav>
 
       {/* ── 100vh Hero Section ── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 overflow-hidden shrink-0">
+      <section ref={heroRef} className="relative h-screen flex flex-col items-center justify-center px-6 overflow-hidden shrink-0">
         <BackgroundVideo src="https://stream.mux.com/kimF2ha9zLrX64H00UgLGPflCzNtl1T0215MlAmeOztv8.m3u8" />
         
+        {/* Floating 3D Glass Orbs */}
+        <FloatingOrb icon={Gamepad2} delay={0.2} top="20%" left="15%" color="#c084fc" size={80} rotateRange={[0, 15, -10, 0]} />
+        <FloatingOrb icon={Trophy} delay={0.4} top="15%" right="15%" color="#fbbf24" size={96} rotateRange={[0, -10, 20, 0]} />
+        <FloatingOrb icon={Zap} delay={0.6} bottom="20%" left="20%" color="#34d399" size={72} rotateRange={[0, 20, -5, 0]} />
+        <FloatingOrb icon={Sparkles} delay={0.8} bottom="25%" right="20%" color="#60a5fa" size={64} rotateRange={[0, -15, 10, 0]} />
+
         <motion.div 
           style={{ y: heroY, opacity: heroOpacity }}
           className="relative z-10 text-center max-w-5xl mx-auto flex flex-col items-center justify-center w-full gap-8"
@@ -100,9 +128,9 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.8 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full liquid-glass border border-[#8b5cf6]/20 text-[#c084fc] text-[10px] md:text-[11px] font-bold tracking-[0.2em] uppercase"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full liquid-glass border border-[#8b5cf6]/20 text-[#c084fc] text-[10px] md:text-[11px] font-bold tracking-[0.2em] uppercase shadow-[0_0_20px_rgba(139,92,246,0.15)]"
           >
-            <Trophy className="w-3 h-3" /> ULTIMATE GAME TRACKER v1.5.0
+            <Star className="w-3 h-3 fill-current" /> ULTIMATE GAME TRACKER v1.5.0
           </motion.div>
 
           <motion.h1 
@@ -110,7 +138,7 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             style={{ fontFamily: "'Instrument Serif', serif" }}
-            className="text-5xl md:text-[72px] font-medium tracking-[-0.01em] leading-[1.1] bg-gradient-to-b from-white via-white/95 to-[#8b5cf6]/70 bg-clip-text text-transparent max-w-4xl"
+            className="text-5xl md:text-[72px] font-medium tracking-[-0.01em] leading-[1.1] bg-gradient-to-b from-white via-white/95 to-[#8b5cf6]/70 bg-clip-text text-transparent max-w-4xl drop-shadow-2xl"
           >
             One vault for all your achievements, <br className="hidden md:block" /> playtime, and collections.
           </motion.h1>
@@ -119,12 +147,12 @@ export default function LandingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.8 }}
-            className="min-h-[50px] mt-4 w-full flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="min-h-[50px] mt-4 w-full flex flex-col sm:flex-row items-center justify-center gap-4 relative z-30"
           >
             {/* Primary Action */}
             <button 
               onClick={() => window.location.href = DOWNLOAD_URL}
-              className="px-10 py-3 text-[14px] font-semibold tracking-wide bg-[#8b5cf6] text-white rounded-full hover:bg-[#7c3aed] shadow-[0_0_30px_rgba(139,92,246,0.3)] hover:shadow-[0_0_50px_rgba(139,92,246,0.5)] transition-all duration-300 flex items-center gap-2"
+              className="px-10 py-3 text-[14px] font-semibold tracking-wide bg-[#8b5cf6] text-white rounded-full hover:bg-[#7c3aed] shadow-[0_0_30px_rgba(139,92,246,0.3)] hover:shadow-[0_0_50px_rgba(139,92,246,0.5)] transition-all duration-300 flex items-center gap-2 cursor-pointer"
             >
               <Download className="w-4 h-4" /> Download Setup.exe
             </button>
@@ -167,7 +195,7 @@ export default function LandingPage() {
                     <button 
                       type="submit" 
                       disabled={submitted}
-                      className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black hover:bg-gray-200 transition-colors shrink-0"
+                      className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black hover:bg-gray-200 transition-colors shrink-0 cursor-pointer"
                     >
                       {submitted ? <Check className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
                     </button>
@@ -200,13 +228,19 @@ export default function LandingPage() {
 
       {/* ── Features Section ── */}
       <section id="features" className="relative py-40 px-6 z-10 bg-[#030308]">
-        <motion.div style={{ y: featuresY }} className="max-w-6xl mx-auto">
-          <div className="text-center mb-24">
+        <div className="max-w-6xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-24"
+          >
             <h2 style={{ fontFamily: "'Instrument Serif', serif" }} className="text-5xl md:text-7xl font-medium tracking-tight mb-6">
               Engineered for absolute <span className="text-[#8b5cf6] italic">precision.</span>
             </h2>
             <p className="text-white/50 max-w-2xl mx-auto">Everything you need to track your library flawlessly, without the bloat.</p>
-          </div>
+          </motion.div>
 
           <div className="grid md:grid-cols-3 gap-6">
             {[
@@ -233,13 +267,19 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </section>
 
       {/* ── Changelog / Updates Section ── */}
       <section id="updates" className="relative py-40 px-6 z-10 bg-gradient-to-b from-[#030308] to-[#0c0c1d]">
-        <motion.div style={{ y: updatesY }} className="max-w-4xl mx-auto">
-          <div className="flex flex-col md:flex-row items-end justify-between mb-16 border-b border-white/10 pb-8">
+        <div className="max-w-4xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.8 }}
+            className="flex flex-col md:flex-row items-end justify-between mb-16 border-b border-white/10 pb-8"
+          >
             <div>
               <h2 style={{ fontFamily: "'Instrument Serif', serif" }} className="text-5xl md:text-6xl font-medium tracking-tight">
                 Release <span className="text-[#c084fc] italic">Intel.</span>
@@ -248,7 +288,7 @@ export default function LandingPage() {
             <div className="text-right mt-6 md:mt-0">
               <span className="glass-pill px-4 py-1.5 text-xs font-bold text-[#8b5cf6] uppercase tracking-widest">Version 1.5.0 (Latest)</span>
             </div>
-          </div>
+          </motion.div>
 
           <div className="space-y-12">
             {[
@@ -286,7 +326,7 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </section>
 
       {/* ── Footer ── */}
