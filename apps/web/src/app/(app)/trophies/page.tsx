@@ -57,6 +57,69 @@ export default function TrophiesPage() {
     }
   }, []);
 
+  // ── Real-Time Auto-Refresh: Listen for local DB updates from cracked achievements ──
+  // When the main process detects a new achievement via the emulator file watcher,
+  // it persists to DB and sends this event. We optimistically update the UI so the
+  // Trophies tab shows the new achievement as earned without a manual refetch.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).gameVault?.onLocalAchievementUpdated) {
+      (window as any).gameVault.onLocalAchievementUpdated((data: any) => {
+        if (!data || !data.key) return;
+
+        // Update the achievements list if this game is currently selected
+        if (data.gameId === selectedGameId || !selectedGameId) {
+          setAchievements(prev => {
+            const existingIdx = prev.findIndex(a => 
+              a.key === data.key || 
+              a.key === `${data.source}_${data.key}` ||
+              (a.key && data.key && a.key.toLowerCase() === data.key.toLowerCase())
+            );
+            
+            if (existingIdx >= 0) {
+              // Mark existing achievement as earned
+              const updated = [...prev];
+              updated[existingIdx] = {
+                ...updated[existingIdx],
+                isEarned: true,
+                earnedAt: data.earnedAt || new Date().toISOString(),
+                name: data.name || updated[existingIdx].name,
+                iconUrl: data.iconUrl || updated[existingIdx].iconUrl,
+              };
+              return updated;
+            }
+            
+            // Achievement not in current list — add it
+            return [...prev, {
+              key: data.key,
+              name: data.name,
+              description: data.description || '',
+              iconUrl: data.iconUrl,
+              isEarned: true,
+              earnedAt: data.earnedAt || new Date().toISOString(),
+              source: data.source,
+              isOfficial: data.source === 'steam' || data.source === 'epic',
+              title: data.name,
+            }];
+          });
+        }
+
+        // Update sidebar game stats
+        setGameStats(prev => prev.map(g => {
+          if (g.gameId === data.gameId) {
+            const newEarned = (g.earned || 0) + 1;
+            const total = g.total || 1;
+            return {
+              ...g,
+              earned: newEarned,
+              percentage: Math.min(100, Math.round((newEarned / total) * 100))
+            };
+          }
+          return g;
+        }));
+      });
+    }
+  }, [selectedGameId]);
+
   useEffect(() => {
     if (gameStats.length > 0 && !selectedGameId) {
       handleSelectGame(gameStats[0].gameId);

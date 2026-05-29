@@ -67,6 +67,8 @@ export async function resolveAllAchievementPaths(steamAppId: number | null, inst
     const staticPaths = [
       { path: path.join(appdata, 'CreamAPI', appIdStr, 'achievements.json'), format: 'json', emulator: 'creamapi' },
       { path: path.join(localAppdata, 'EMPRESS', appIdStr, 'achievements.json'), format: 'json', emulator: 'empress' },
+      // EMPRESS v2+ writes to achiev.json (shortened filename)
+      { path: path.join(localAppdata, 'EMPRESS', appIdStr, 'achiev.json'), format: 'json', emulator: 'empress_v2' },
       { path: path.join(appdata, 'OnlineFix', appIdStr, 'achievements.json'), format: 'json', emulator: 'onlinefix' },
       { path: path.join(appdata, '3DM', appIdStr, 'achievements.json'), format: 'json', emulator: '3dm' },
       { path: path.join(publicDocs, 'Steam', 'TENOKE', appIdStr, 'achievements.ini'), format: 'ini', emulator: 'tenoke' },
@@ -112,11 +114,25 @@ export async function resolveAllAchievementPaths(steamAppId: number | null, inst
     }
   }
 
-  // 4. Voices38 UE / Custom Variant (e.g. Voices of the Void)
+  // 4. Voices38 UE / Custom Variant — expanded for UE4 + UE5 + packaged builds
   const gameFolderName = path.basename(installDir);
-  const uePath = path.join(localAppdata, gameFolderName, 'Saved', 'data.sav');
-  if (fs.existsSync(uePath)) {
-    addResult(uePath, 'json', 'voices38_ue');
+  const voices38Paths = [
+    // Original UE4 path
+    path.join(localAppdata, gameFolderName, 'Saved', 'data.sav'),
+    // UE5 variant: SaveGames subfolder
+    path.join(localAppdata, gameFolderName, 'Saved', 'SaveGames', 'data.sav'),
+    // UE5 packaged build: WindowsNoEditor subfolder
+    path.join(localAppdata, gameFolderName, 'WindowsNoEditor', 'Saved', 'data.sav'),
+    // In-tree Engine variant
+    path.join(installDir, 'Engine', 'Saved', 'data.sav'),
+    // Some VOICES38 cracks use achievements.json instead of data.sav
+    path.join(localAppdata, gameFolderName, 'Saved', 'achievements.json'),
+  ];
+  for (const vp of voices38Paths) {
+    if (fs.existsSync(vp)) {
+      const fmt = vp.endsWith('.json') ? 'json' : 'json'; // data.sav is JSON internally
+      addResult(vp, fmt, 'voices38_ue');
+    }
   }
 
   // ── LAYER 2: Scan Install Directory and Parents ────────────────────────────
@@ -204,6 +220,40 @@ export async function resolveAllAchievementPaths(steamAppId: number | null, inst
           }
         }
       } catch (err: any) {}
+    }
+  }
+
+  // ── LAYER 4: Deep-Scan Fallback (Future-Proof) ─────────────────────────────
+  // If Layers 1-3 found nothing, scan the install directory recursively for ANY
+  // file named achievements.json, achievements.ini, achiev.json, or data.sav.
+  // Depth-limited to 5 levels to avoid scanning entire drives.
+  if (results.length === 0) {
+    log.info(`[PathResolver] Layer 4: Deep-scan fallback in ${installDir}`);
+    const deepPatterns = [
+      '**/achievements.json',
+      '**/achievements.ini',
+      '**/achiev.json',
+      '**/data.sav',
+    ];
+    try {
+      const deepFiles = await fg(deepPatterns, {
+        cwd: installDir,
+        absolute: true,
+        caseSensitiveMatch: false,
+        deep: 5,
+        suppressErrors: true,
+        followSymbolicLinks: false,
+      });
+      for (const file of deepFiles) {
+        const filename = path.basename(file).toLowerCase();
+        const format = filename.endsWith('.json') || filename === 'data.sav' ? 'json' : 'ini';
+        addResult(file, format, 'unknown_deep_scan');
+      }
+      if (deepFiles.length > 0) {
+        log.info(`[PathResolver] Layer 4 found ${deepFiles.length} achievement files via deep scan`);
+      }
+    } catch (err: any) {
+      log.warn(`[PathResolver] Layer 4 deep scan failed: ${err.message}`);
     }
   }
 

@@ -30,7 +30,7 @@ export class AchievementWatcher {
         persistent: true,
         usePolling: false,
         awaitWriteFinish: {
-          stabilityThreshold: 500,
+          stabilityThreshold: 400,
           pollInterval: 100
         },
         ignoreInitial: true,
@@ -79,6 +79,30 @@ export class AchievementWatcher {
       this.watcher.on('change', clearFallback);
       this.watcher.on('add', clearFallback);
 
+      // Also watch the parent directory explicitly — catches lazy file creation
+      // by emulators that don't create the achievements file until the first unlock.
+      const parentDir = path.dirname(filePath);
+      if (parentDir !== filePath) {
+        try {
+          const dirWatcher = chokidar.watch(parentDir, {
+            persistent: true,
+            usePolling: false,
+            ignoreInitial: true,
+            depth: 0,
+          });
+          dirWatcher.on('add', (addedPath: string) => {
+            if (path.basename(addedPath).toLowerCase() === path.basename(filePath).toLowerCase()) {
+              log.info(`[AchWatcher] Target file created in parent dir: ${addedPath}`);
+              this.triggerChange();
+            }
+          });
+          // Store reference so we can close it on stop
+          (this as any)._dirWatcher = dirWatcher;
+        } catch (dirErr: any) {
+          log.warn(`[AchWatcher] Failed to watch parent dir ${parentDir}: ${dirErr.message}`);
+        }
+      }
+
     } catch (err: any) {
       log.error(`[AchWatcher] Failed to start chokidar: ${err.message}. Falling back to polling immediately.`);
       this.startPolling(filePath);
@@ -121,13 +145,13 @@ export class AchievementWatcher {
       clearTimeout(this.debounceTimer);
     }
     
-    // Aggressive debounce: wait 1.5 seconds after the LAST change event before firing
+    // Aggressive debounce: wait 800ms after the LAST change event before firing
     this.debounceTimer = setTimeout(() => {
       log.info(`[AchWatcher] Firing debounced change event.`);
       if (this.onChangeCallback) {
         this.onChangeCallback();
       }
-    }, 1500);
+    }, 800);
   }
 
   stop(): void {
@@ -151,6 +175,12 @@ export class AchievementWatcher {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
+    }
+    
+    // Close parent directory watcher if it exists
+    if ((this as any)._dirWatcher) {
+      (this as any)._dirWatcher.close().catch(() => {});
+      (this as any)._dirWatcher = null;
     }
     
     this.onChangeCallback = null;

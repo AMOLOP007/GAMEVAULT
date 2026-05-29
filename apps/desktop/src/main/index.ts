@@ -351,7 +351,7 @@ async function scanGameAchievementsOnce(gameId: string, userId: string): Promise
   try {
     // SESSION GATE: Must have at least one tracked GameVault session
     if (!gameId) return;
-    const hasSession = await hasValidSession(gameId, userId);
+    const hasSession = await hasValidSession(userId, gameId);
     if (!hasSession) {
       log.info(`[LazyAchScan] No GameVault session for game ${gameId}. Skipping offline scan.`);
       return;
@@ -386,6 +386,31 @@ async function scanGameAchievementsOnce(gameId: string, userId: string): Promise
             source: ach.source,
           },
         });
+
+        // Also upsert the canonical (unprefixed) key for Trophies tab matching
+        try {
+          await (prisma as any).gameAchievement.upsert({
+            where: {
+              userId_gameId_key: {
+                userId,
+                gameId: ach.gameId,
+                key: ach.key,
+              },
+            },
+            update: { isEarned: true, earnedAt: ach.earnedAt || new Date() },
+            create: {
+              userId,
+              gameId: ach.gameId,
+              key: ach.key,
+              name: ach.name,
+              description: ach.description || '',
+              iconUrl: ach.iconUrl,
+              isEarned: true,
+              earnedAt: ach.earnedAt || new Date(),
+              source: ach.source,
+            },
+          });
+        } catch {} // Non-fatal
       } catch (dbErr: any) {
         log.warn(`[LazyAchScan] DB upsert failed for ${ach.key}: ${dbErr.message}`);
       }
@@ -589,7 +614,7 @@ function setupTracker() {
       source: unlocked.source,
     });
 
-    // 3. Persist to local SQLite DB
+    // 3. Persist to local SQLite DB (emulator-prefixed key)
     try {
       await (prisma as any).gameAchievement.upsert({
         where: {
@@ -615,6 +640,49 @@ function setupTracker() {
           earnedAt: unlocked.earnedAt || new Date(),
           source: unlocked.source,
         }
+      });
+
+      // 3b. Also upsert the CANONICAL (unprefixed) key so the Trophies tab
+      // (which queries by Steam canonical key) shows it as earned.
+      try {
+        await (prisma as any).gameAchievement.upsert({
+          where: {
+            userId_gameId_key: {
+              userId,
+              gameId: unlocked.gameId,
+              key: unlocked.key,
+            }
+          },
+          update: {
+            isEarned: true,
+            earnedAt: unlocked.earnedAt || new Date(),
+            name: unlocked.name,
+          },
+          create: {
+            userId,
+            gameId: unlocked.gameId,
+            key: unlocked.key,
+            name: unlocked.name,
+            description: unlocked.description || '',
+            iconUrl: unlocked.iconUrl,
+            isEarned: true,
+            earnedAt: unlocked.earnedAt || new Date(),
+            source: unlocked.source,
+          }
+        });
+      } catch {} // Non-fatal: canonical key may already exist
+
+      // 3c. Notify the renderer that a local DB achievement was updated.
+      // This allows the Trophies tab to auto-refresh without a full refetch.
+      mainWindow?.webContents.send('achievements:localDbUpdated', {
+        gameId: unlocked.gameId,
+        key: unlocked.key,
+        name: unlocked.name,
+        description: unlocked.description,
+        iconUrl: unlocked.iconUrl,
+        isEarned: true,
+        earnedAt: unlocked.earnedAt?.toISOString() || new Date().toISOString(),
+        source: unlocked.source,
       });
     } catch (err: any) {
       log.error(`[Main] Failed to save cracked achievement: ${err.message}`);

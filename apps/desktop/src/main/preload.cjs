@@ -118,6 +118,12 @@ contextBridge.exposeInMainWorld('gameVault', {
     ipcRenderer.removeAllListeners('achievements:offlineDetected')
     ipcRenderer.on('achievements:offlineDetected', (_, data) => cb(data))
   },
+  // Real-time local DB updates — fired when cracked achievements are persisted
+  // so the Trophies tab can auto-refresh without manual refetch.
+  onLocalAchievementUpdated: (cb) => {
+    ipcRenderer.removeAllListeners('achievements:localDbUpdated');
+    ipcRenderer.on('achievements:localDbUpdated', (_, data) => cb(data));
+  },
   confirmOfflineAchievements: (achievements) => {
     if (!Array.isArray(achievements)) return Promise.reject(new Error('achievements must be an array'));
     return ipcRenderer.invoke('achievements:confirmOffline', { achievements });
