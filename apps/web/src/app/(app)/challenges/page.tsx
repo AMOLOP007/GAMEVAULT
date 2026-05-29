@@ -134,82 +134,96 @@ export default function ChallengesPage() {
 
       {/* ── Content ── */}
       <div className="mt-8">
-        <div
-          className={activeTab === 'challenges' ? 'block animate-fade-in' : 'hidden'}
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Daily Section */}
-            <div className="col-span-full">
-              <div className="flex items-center gap-3 mb-4">
-                <Clock className="w-5 h-5 text-[#fbbf24]" />
-                <h3 className="text-lg font-black text-white tracking-tight uppercase">Daily Objectives</h3>
-              </div>
-            </div>
-            {dailyChallenges.map((challenge, i) => (
-              <ChallengeCard key={challenge.id} challenge={challenge} index={i} />
-            ))}
-
-            {/* Weekly Section */}
-            <div className="col-span-full mt-8">
-              <div className="flex items-center gap-3 mb-4">
-                <TrendingUp className="w-5 h-5 text-[#8b5cf6]" />
-                <h3 className="text-lg font-black text-white tracking-tight uppercase">Weekly Missions</h3>
-              </div>
-            </div>
-            {weeklyChallenges.map((challenge, i) => (
-              <ChallengeCard key={challenge.id} challenge={challenge} index={i} color="#8b5cf6" />
-            ))}
-
-            {/* Milestone Section */}
-            <div className="col-span-full mt-8">
-              <div className="flex items-center gap-3 mb-4">
-                <Star className="w-5 h-5 text-[#ec4899]" />
-                <h3 className="text-lg font-black text-white tracking-tight uppercase">Lifetime Milestones</h3>
-              </div>
-            </div>
-            {milestoneChallenges.map((challenge, i) => (
-              <ChallengeCard key={challenge.id} challenge={challenge} index={i} color="#ec4899" />
-            ))}
-          </div>
-        </div>
-
-        <div
-          className={activeTab === 'badges' ? 'block animate-fade-in' : 'hidden'}
-        >
-          {/* Badges Filter Toggles */}
-          <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl w-fit border border-white/5">
-            <button
-              onClick={() => setBadgeFilter('all')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                badgeFilter === 'all' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
-              }`}
+        <AnimatePresence mode="wait">
+          {activeTab === 'challenges' && (
+            <motion.div
+              key="challenges"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
             >
-              ALL
-            </button>
-            <button
-              onClick={() => setBadgeFilter('unlocked')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                badgeFilter === 'unlocked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
-              }`}
-            >
-              UNLOCKED
-            </button>
-            <button
-              onClick={() => setBadgeFilter('locked')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                badgeFilter === 'locked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
-              }`}
-            >
-              LOCKED
-            </button>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Daily Section */}
+                <div className="col-span-full">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Clock className="w-5 h-5 text-[#fbbf24]" />
+                    <h3 className="text-lg font-black text-white tracking-tight uppercase">Daily Objectives</h3>
+                  </div>
+                </div>
+                {dailyChallenges.map((challenge, i) => (
+                  <ChallengeCard key={challenge.id} challenge={challenge} index={i} />
+                ))}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-            {filteredBadges.map((badge, i) => (
-              <BadgeCard key={badge.id} badge={badge} index={i} />
-            ))}
-          </div>
-        </div>
+                {/* Weekly Section */}
+                <div className="col-span-full mt-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <TrendingUp className="w-5 h-5 text-[#8b5cf6]" />
+                    <h3 className="text-lg font-black text-white tracking-tight uppercase">Weekly Missions</h3>
+                  </div>
+                </div>
+                {weeklyChallenges.map((challenge, i) => (
+                  <ChallengeCard key={challenge.id} challenge={challenge} index={i} color="#8b5cf6" />
+                ))}
+
+                {/* Milestone Section */}
+                <div className="col-span-full mt-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Star className="w-5 h-5 text-[#ec4899]" />
+                    <h3 className="text-lg font-black text-white tracking-tight uppercase">Lifetime Milestones</h3>
+                  </div>
+                </div>
+                {milestoneChallenges.map((challenge, i) => (
+                  <ChallengeCard key={challenge.id} challenge={challenge} index={i} color="#ec4899" />
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'badges' && (
+            <motion.div
+              key="badges"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Badges Filter Toggles */}
+              <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl w-fit border border-white/5">
+                <button
+                  onClick={() => setBadgeFilter('all')}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    badgeFilter === 'all' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+                  }`}
+                >
+                  ALL
+                </button>
+                <button
+                  onClick={() => setBadgeFilter('unlocked')}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    badgeFilter === 'unlocked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+                  }`}
+                >
+                  UNLOCKED
+                </button>
+                <button
+                  onClick={() => setBadgeFilter('locked')}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    badgeFilter === 'locked' ? 'bg-[#3b82f6] text-[#0c0c1d]' : 'text-white/40 hover:text-white'
+                  }`}
+                >
+                  LOCKED
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                {filteredBadges.map((badge, i) => (
+                  <BadgeCard key={badge.id} badge={badge} index={i} />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
