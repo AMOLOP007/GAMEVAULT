@@ -115,6 +115,7 @@ module.exports = {
     // Preserve user data on upgrade
     deleteAppDataOnUninstall: false,
     differentialPackage: true,
+    include: 'apps/desktop/assets/installer.nsh',
   },
 
   // Exclude non-Windows Prisma engines
