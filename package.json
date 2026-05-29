@@ -11,8 +11,9 @@
   "scripts": {
     "dev:api": "cross-env NODE_OPTIONS=\"--max-old-space-size=512\" npm run dev --workspace=apps/api",
     "dev:web": "cross-env NODE_OPTIONS=\"--max-old-space-size=1024\" npm run dev --workspace=apps/web",
-    "dev:desktop": "concurrently -k -p \"[{name}]\" -n \"WEB,API,DESK\" -c \"magenta,cyan,blue\" \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:desktop-only\"",
-    "dev:lite": "concurrently -k -p \"[{name}]\" -n \"API,DESK\" -c \"cyan,blue\" \"npm run dev:api\" \"npm run dev:desktop-only\"",
+    "enforce-size": "powershell.exe -ExecutionPolicy Bypass -File ./scripts/enforcer.ps1",
+    "dev:desktop": "concurrently -k -p \"[{name}]\" -n \"WEB,API,DESK,ENFORCER\" -c \"magenta,cyan,blue,red\" \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:desktop-only\" \"npm run enforce-size\"",
+    "dev:lite": "concurrently -k -p \"[{name}]\" -n \"API,DESK,ENFORCER\" -c \"cyan,blue,red\" \"npm run dev:api\" \"npm run dev:desktop-only\" \"npm run enforce-size\"",
     "dev:desktop-only": "npm run dev --workspace=apps/desktop",
     "package": "npm run build:all && electron-builder --config electron-builder.config.js",
     "build:all": "npm run build:api && npm run build:web && npm run build:desktop",
