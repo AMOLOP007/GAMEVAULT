@@ -5,7 +5,7 @@
    Purple / Violet / Black — Built for Gamers
    ══════════════════════════════════════════════════════ */
 
-@theme {
+:root {
   /* ── Core Blacks ─────────────────────────── */
   --color-bg-abyss:    #030308;
   --color-bg-void:     #08081a;
